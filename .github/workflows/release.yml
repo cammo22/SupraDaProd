@@ -115,10 +115,15 @@ jobs:
           EOF
 
       - name: Build Android APKs
+        env:
+          TAURI_ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
+          TAURI_ANDROID_KEYSTORE_PASSWORD: supradaprod2026
+          TAURI_ANDROID_KEY_ALIAS: supradaprod
+          TAURI_ANDROID_KEY_PASSWORD: supradaprod2026
         run: npx tauri android build --apk --target aarch64 --target armv7
 
       - name: Upload APKs to the release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          files: src-tauri/gen/android/app/build/outputs/apk/**/release/*.apk
