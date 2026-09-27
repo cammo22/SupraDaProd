@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build-desktop:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ""
+          - platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+          - platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Build & release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "SupraDaProd ${{ github.ref_name }}"
+          releaseBody: |
+            🎨 SupraDaProd — text-to-image studio powered by **Supra2-IMG** (104M parameters).
+
+            **Downloads**
+            - 🪟 Windows: `.msi` / `.exe` installer
+            - 🍎 macOS (Apple Silicon): `aarch64.dmg`
+            - 🍎 macOS (Intel): `x64.dmg`
+
+            ℹ️ The model (~1 GB) is downloaded once on first launch and cached inside
+            the app — afterwards it works fully **offline**. Best on hardware with
+            WebGPU; falls back to CPU (slower).
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  build-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Locate Android NDK
+        run: echo "ANDROID_NDK_HOME=$(ls -d $ANDROID_HOME/ndk/* | head -n 1)" >> $GITHUB_ENV
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Init Tauri Android project
+        run: npx tauri android init
+
+      - name: Grant microphone permission
+        run: |
+          FILE=src-tauri/gen/android/app/src/main/AndroidManifest.xml
+          sed -i 's#<application#<uses-permission android:name="android.permission.RECORD_AUDIO" /><application#' $FILE
+          grep -q RECORD_AUDIO $FILE
+
+      - name: Create signing keystore
+        run: |
+          keytool -genkeypair -v -keystore release.keystore -alias supradaprod \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass supradaprod2026 -keypass supradaprod2026 \
+            -dname "CN=SupraDaProd, OU=DaProd, O=DaProd, L=Rome, S=Italy, C=IT"
+          cat > src-tauri/gen/android/keystore.properties <<EOF
+          storeFile=${{ github.workspace }}/release.keystore
+          storePassword=supradaprod2026
+          keyAlias=supradaprod
+          keyPassword=supradaprod2026
+          EOF
+
+      - name: Build Android APKs
+        run: npx tauri android build --apk --target aarch64 --target armv7
+
+      - name: Upload APKs to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: src-tauri/gen/android/app/build/outputs/apk/**/*.apk

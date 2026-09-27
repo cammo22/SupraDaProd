@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SupraDaProd",
+  "version": "1.0.0",
+  "identifier": "com.daprod.supradaprod",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "SupraDaProd ✨",
+        "width": 1080,
+        "height": 800,
+        "minWidth": 400,
+        "minHeight": 620,
+        "resizable": true,
+        "center": true,
+        "backgroundColor": "#07070f"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "GraphicsDesign",
+    "shortDescription": "Text-to-image with a 100M-parameter model — type it or say it.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "android": {
+      "minSdkVersion": 26
+    }
+  }
+}

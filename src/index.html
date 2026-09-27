@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>SupraDaProd ✨</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.all.min.js"></script>
+</head>
+<body>
+  <div class="aurora" aria-hidden="true">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+    <div class="grain"></div>
+  </div>
+
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">⚡</span>
+        <div class="brand-text">
+          <h1>SupraDaProd</h1>
+          <span class="tagline" data-i18n="tagline">100M parametri di pura fantasia</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div class="lang-switch" id="langSwitch" title="Language">
+          <button data-lang="it" class="on">🇮🇹</button>
+          <button data-lang="en">🇬🇧</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="views">
+
+      <!-- ============ CREATE VIEW ============ -->
+      <section class="view on" id="view-create">
+        <div class="stage-wrap">
+          <div class="stage" id="stage">
+            <canvas id="canvas" width="256" height="256"></canvas>
+            <div class="stage-ring" id="stageRing" aria-hidden="true"></div>
+            <div class="stage-hint" id="stageHint" data-i18n="stage_hint">Scrivi, premi genera ✨</div>
+            <div class="stage-progress" id="stageProgress" hidden>
+              <div class="sp-title" id="spTitle">…</div>
+              <div class="sp-bar"><i id="spFill"></i></div>
+              <div class="sp-sub" id="spSub"></div>
+            </div>
+          </div>
+          <div class="backend-chip" id="backendChip" hidden></div>
+        </div>
+
+        <div class="prompt-card">
+          <textarea id="prompt" rows="2" data-i18n-ph="prompt_ph" placeholder="Descrivi l'immagine che vuoi…"></textarea>
+          <div class="prompt-row">
+            <button class="btn ghost" id="btnRandom" title="Random">🎲 <span data-i18n="random">Random</span></button>
+            <button class="btn ghost" id="btnTune" title="Impostazioni">⚙️ <span data-i18n="tune">Regola</span></button>
+            <button class="btn primary grow" id="btnGo">✨ <span data-i18n="generate">Genera</span></button>
+          </div>
+
+          <div class="tune" id="tune" hidden>
+
+      <!-- ============ VOICE VIEW ============ -->
+      <section class="view" id="view-voice">
+        <div class="voice-center">
+          <p class="voice-tip" id="voiceTip" data-i18n="voice_tip">Tieni premuto il microfono e parla.<br>Rilascia e la magia parte.</p>
+
+          <div class="hold-zone">
+            <div class="pulse-ring r1"></div>
+            <div class="pulse-ring r2"></div>
+            <button class="hold-btn" id="holdBtn" aria-label="record">
+              <span class="mic">🎙</span>
+              <span class="wave" id="wave" aria-hidden="true">
+                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              </span>
+            </button>
+          </div>
+          <div class="rec-status" id="recStatus" data-i18n="rec_idle">Pronto — tieni premuto</div>
+
+          <div class="transcript-card" id="transcriptCard" hidden>
+            <div class="tc-head">📝 <span data-i18n="transcript">Trascrizione</span>
+              <span class="chip" id="sttEngine">whisper-tiny</span>
+            </div>
+            <textarea id="transcript" rows="3"></textarea>
+            <div class="prompt-row">
+              <button class="btn ghost" id="btnRedo">↺ <span data-i18n="redo">Riregistra</span></button>
+              <button class="btn primary grow" id="btnVoiceGo">✨ <span data-i18n="gen_from_voice">Genera immagine</span></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ GALLERY VIEW ============ -->
+      <section class="view" id="view-gallery">
+        <div class="gallery-head">
+          <h2 data-i18n="gallery">Galleria</h2>
+          <span class="chip" id="galleryCount">0</span>
+        </div>
+        <div class="grid" id="galleryGrid"></div>
+        <div class="empty" id="galleryEmpty">
+          <div class="empty-art">🖼</div>
+          <p data-i18n="gallery_empty">Le tue creazioni vivranno qui.</p>
+        </div>
+      </section>
+    </main>
+
+    <nav class="tabbar">
+      <button class="tab on" data-view="create"><span>✨</span><em data-i18n="tab_create">Crea</em></button>
+      <button class="tab" data-view="voice"><span>🎙</span><em data-i18n="tab_voice">Voce</em></button>
+      <button class="tab" data-view="gallery"><span>🖼</span><em data-i18n="tab_gallery">Galleria</em></button>
+    </nav>
+  </div>
+
+  <!-- ============ MODEL DOWNLOADER OVERLAY ============ -->
+  <div class="overlay" id="dlOverlay" hidden>
+    <div class="dl-card">
+      <h2>📦 <span data-i18n="dl_title">Un solo scaricamento, poi è tutto tuo</span></h2>
+      <p class="dl-sub" data-i18n="dl_sub">Il modello (1 GB) viene salvato dentro l'app — dopo funzionerà anche offline.</p>
+      <div class="dl-item"><span>DiT</span><div class="sp-bar"><i id="dlDit"></i></div><b id="dlDitTxt">0%</b></div>
+      <div class="dl-item"><span>T5</span><div class="sp-bar"><i id="dlT5"></i></div><b id="dlT5Txt">0%</b></div>
+      <div class="dl-item"><span>VAE</span><div class="sp-bar"><i id="dlVae"></i></div><b id="dlVaeTxt">0%</b></div>
+      <div class="dl-status" id="dlStatus"></div>
+    </div>
+  </div>
+
+  <!-- ============ IMAGE MODAL ============ -->
+  <div class="overlay" id="imgModal" hidden>
+    <div class="modal-card">
+      <img id="modalImg" alt="" />
+      <div class="modal-meta">
+        <p id="modalPrompt"></p>
+        <p class="modal-info" id="modalInfo"></p>
+        <div class="prompt-row">
+          <button class="btn ghost" id="btnSaveImg">💾 <span data-i18n="save">Salva</span></button>
+          <button class="btn ghost" id="btnReuse">♻️ <span data-i18n="reuse">Riusa</span></button>
+          <button class="btn danger" id="btnDelete">🗑</button>
+          <button class="btn primary" id="btnCloseModal">✕</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
+
+            <label><span data-i18n="steps">Passi</span> <b id="stepsVal">30</b>
+              <input type="range" id="steps" min="10" max="50" step="5" value="30" />
+            </label>
+            <label><span data-i18n="cfg">Fedeltà</span> <b id="cfgVal">3.0</b>
+              <input type="range" id="cfg" min="10" max="70" step="5" value="30" />
+            </label>
+            <label class="seed-row"><span>Seed</span>
+              <input type="number" id="seed" value="0" min="0" max="999999999" />
+              <button class="btn ghost tiny" id="btnShuffle">🎰</button>
+            </label>
+          </div>
+        </div>
+      </section>
