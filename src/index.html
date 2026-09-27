@@ -59,6 +59,19 @@
           </div>
 
           <div class="tune" id="tune" hidden>
+            <label><span data-i18n="steps">Passi</span> <b id="stepsVal">30</b>
+              <input type="range" id="steps" min="10" max="50" step="5" value="30" />
+            </label>
+            <label><span data-i18n="cfg">Fedeltà</span> <b id="cfgVal">3.0</b>
+              <input type="range" id="cfg" min="10" max="70" step="5" value="30" />
+            </label>
+            <label class="seed-row"><span>Seed</span>
+              <input type="number" id="seed" value="0" min="0" max="999999999" />
+              <button class="btn ghost tiny" id="btnShuffle">🎰</button>
+            </label>
+          </div>
+        </div>
+      </section>
 
       <!-- ============ VOICE VIEW ============ -->
       <section class="view" id="view-voice">
@@ -145,17 +158,3 @@
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>
-
-            <label><span data-i18n="steps">Passi</span> <b id="stepsVal">30</b>
-              <input type="range" id="steps" min="10" max="50" step="5" value="30" />
-            </label>
-            <label><span data-i18n="cfg">Fedeltà</span> <b id="cfgVal">3.0</b>
-              <input type="range" id="cfg" min="10" max="70" step="5" value="30" />
-            </label>
-            <label class="seed-row"><span>Seed</span>
-              <input type="number" id="seed" value="0" min="0" max="999999999" />
-              <button class="btn ghost tiny" id="btnShuffle">🎰</button>
-            </label>
-          </div>
-        </div>
-      </section>
