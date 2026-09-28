@@ -98,10 +98,9 @@ jobs:
 
       - name: Upload portable zip
         if: matrix.platform == 'windows-latest'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          files: SupraDaProd_portable_x64.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload latest SupraDaProd_portable_x64.zip --clobber
 
   build-android:
     needs: prepare
@@ -171,7 +170,12 @@ jobs:
           "$BT/apksigner" verify --print-certs "SupraDaProd_${VERSION}_android_universal.apk"
 
       - name: Upload Android APK
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          files: SupraDaProd_*_android_universal.apk
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in $(seq 1 40); do
+            if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then break; fi
+            echo "waiting for the rolling release '$RELEASE_TAG' to exist…"
+            sleep 15
+          done
+          gh release upload "$RELEASE_TAG" "SupraDaProd_${GITHUB_REF_NAME#v}_android_universal.apk" --clobber
