@@ -41,6 +41,7 @@ export const I18N = {
     stt_dl: "Primo avvio: scarico whisper-tiny (~50 MB)…",
     stt_ready: "Trascrivo…",
     error_generic: "Ops, errore",
+    img_missing: "Immagine non disponibile — riprova a generarla",
     prompt_en_hint: "💡 Il modello capisce meglio l'inglese, ma prova anche l'italiano!",
   },
   en: {
@@ -84,6 +85,7 @@ export const I18N = {
     stt_dl: "First run: fetching whisper-tiny (~50 MB)…",
     stt_ready: "Transcribing…",
     error_generic: "Oops, error",
+    img_missing: "Image unavailable — try generating it again",
     prompt_en_hint: "💡 The model understands English best — but try Italian too!",
   },
 };

@@ -151,25 +151,27 @@ jobs:
             -storepass supradaprod2026 -keypass supradaprod2026 \
             -dname "CN=SupraDaProd, OU=DaProd, O=DaProd, L=Rome, S=Italy, C=IT"
 
-      - name: Build Android APKs (signed)
-        env:
-          TAURI_ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
-          TAURI_ANDROID_KEYSTORE_PASSWORD: supradaprod2026
-          TAURI_ANDROID_KEY_ALIAS: supradaprod
-          TAURI_ANDROID_KEY_PASSWORD: supradaprod2026
+      - name: Build Android APK
         run: npx tauri android build --apk --target aarch64 --target armv7
 
-      - name: Collect APKs
+      - name: Sign APK with apksigner
         run: |
-          mkdir -p apks
-          find src-tauri/gen/android/app/build/outputs/apk -name "*release*.apk" -not -name "*unsigned*" -exec cp {} apks/ \;
-          ls -la apks
-          cd apks
-          zip -r ../SupraDaProd_android_apk.zip .
-          cd ..
+          VERSION=${GITHUB_REF_NAME#v}
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
+          APK_IN=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          echo "signing $APK_IN"
+          "$BT/zipalign" -f -p 4 "$APK_IN" app-aligned.apk
+          "$BT/apksigner" sign \
+            --ks release.keystore \
+            --ks-pass pass:supradaprod2026 \
+            --ks-key-alias supradaprod \
+            --key-pass pass:supradaprod2026 \
+            --out "SupraDaProd_${VERSION}_android_universal.apk" \
+            app-aligned.apk
+          "$BT/apksigner" verify --print-certs "SupraDaProd_${VERSION}_android_universal.apk"
 
-      - name: Upload Android zip
+      - name: Upload Android APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          files: SupraDaProd_android_apk.zip
+          files: SupraDaProd_*_android_universal.apk

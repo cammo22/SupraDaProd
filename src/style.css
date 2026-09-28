@@ -138,6 +138,8 @@ textarea, input { -webkit-user-select: text; user-select: text; }
 .tile:hover { transform: translateY(-3px); box-shadow: 0 14px 34px -12px rgba(124,92,255,.6); }
 .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .tile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 9px 7px; font-size: 10.5px; color: #fff; background: linear-gradient(transparent, rgba(4,4,12,.9)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile.broken { background: repeating-linear-gradient(45deg, #14142a, #14142a 8px, #101024 8px, #101024 16px); }
+.tile.broken::after { content: "⚠"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 26px; color: var(--dim); }
 .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--dim); }
 .empty-art { font-size: 52px; opacity: .5; animation: floaty 3.4s ease-in-out infinite; }
 @keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }

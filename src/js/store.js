@@ -39,25 +39,34 @@ export function list() {
 export async function save(blob, meta) {
   const name = `img_${Date.now()}_${Math.floor(Math.random() * 1e6)}.png`;
   const entry = { file: name, ...meta, date: new Date().toISOString() };
+  // Always keep an in-memory copy: the gallery shows it instantly and it still
+  // works even if disk persistence is unavailable for any reason.
+  const url = URL.createObjectURL(blob);
+  memory.set(name, url);
   if (isTauri() && fsMod) {
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    await fsMod.writeFile(await pathMod.join(baseDir, name), bytes);
-    index.unshift(entry);
-    await persistIndex();
-  } else {
-    entry.url = URL.createObjectURL(blob);
-    memory.set(name, entry.url);
-    index.unshift(entry);
+    try {
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      await fsMod.writeFile(await pathMod.join(baseDir, name), bytes);
+      index.unshift(entry);
+      await persistIndex();
+      return entry;
+    } catch (err) {
+      console.warn("disk save failed — keeping image in memory", err);
+    }
   }
+  entry.url = url;
+  index.unshift(entry);
   return entry;
 }
 
 export async function urlFor(file) {
+  const mem = memory.get(file);
+  if (mem) return mem;
   if (isTauri() && fsMod) {
     const { convertFileSrc } = await import("@tauri-apps/api/core");
     return convertFileSrc(await pathMod.join(baseDir, file));
   }
-  return memory.get(file) || null;
+  return null;
 }
 
 export async function bytesOf(file) {

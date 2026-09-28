@@ -49,6 +49,10 @@ export async function render() {
     img.loading = "lazy";
     img.src = (await store.urlFor(item.file)) || "";
     img.alt = item.prompt || "";
+    img.addEventListener("error", () => {
+      tile.classList.add("broken");
+      img.remove();
+    });
     const cap = document.createElement("div");
     cap.className = "cap";
     cap.textContent = item.prompt || "";
@@ -61,11 +65,25 @@ export async function render() {
 
 async function open(item) {
   current = item;
-  modalImg.src = (await store.urlFor(item.file)) || "";
+  const url = await store.urlFor(item.file);
+  if (!url) {
+    toast(t("img_missing"));
+    return;
+  }
+  modalImg.onerror = () => toast(t("img_missing"));
+  modalImg.src = url;
   modalPrompt.textContent = item.prompt || "";
   modalInfo.textContent = [
     new Date(item.date).toLocaleString(),
     `seed ${item.seed ?? "—"} · ${item.steps ?? "—"} steps · cfg ${item.cfg ?? "—"}`,
   ].join(" · ");
   modal.hidden = false;
+}
+
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => (el.hidden = true), 2600);
 }
