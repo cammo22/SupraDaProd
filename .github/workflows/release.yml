@@ -5,8 +5,28 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Single rolling release: every tag updates the same "latest" release.
+env:
+  RELEASE_TAG: latest
+
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Reset rolling release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASSET_IDS=$(gh api repos/${{ github.repository }}/releases/tags/$RELEASE_TAG --jq '.assets[].id' 2>/dev/null || true)
+          for id in $ASSET_IDS; do
+            gh api -X DELETE repos/${{ github.repository }}/releases/assets/$id || true
+          done
+          echo "rolling release $RELEASE_TAG is now empty"
+
   build-desktop:
+    needs: prepare
     permissions:
       contents: write
     strategy:
@@ -39,29 +59,52 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
-      - name: Build & release
+      - name: Build & upload
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "SupraDaProd ${{ github.ref_name }}"
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: "⚡ SupraDaProd — Latest"
           releaseBody: |
-            🎨 SupraDaProd — text-to-image studio powered by **Supra2-IMG** (104M parameters).
+            🎨 Text-to-image studio powered by **Supra2-IMG** (104M parameters, fully on-device).
 
-            **Downloads**
-            - 🪟 Windows: `.msi` / `.exe` installer
-            - 🍎 macOS (Apple Silicon): `aarch64.dmg`
-            - 🍎 macOS (Intel): `x64.dmg`
+            | Platform | File |
+            | --- | --- |
+            | 🪟 Windows installer | `*_x64-setup.exe` or `*.msi` |
+            | 🪟 Windows portable | `SupraDaProd_*_portable_x64.zip` — unzip & run, no install |
+            | 🍎 macOS Apple Silicon | `*_aarch64.dmg` |
+            | 🍎 macOS Intel | `*_x64.dmg` |
+            | 🤖 Android | `SupraDaProd_*_apk.zip` (arm64 + armv7, signed) |
 
             ℹ️ The model (~1 GB) is downloaded once on first launch and cached inside
-            the app — afterwards it works fully **offline**. Best on hardware with
-            WebGPU; falls back to CPU (slower).
+            the app — afterwards it works fully **offline**. Best with WebGPU;
+            automatic CPU fallback (slower).
+
+            This release is **rolling**: every new version replaces these files.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
 
+      - name: Zip portable Windows exe
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem "src-tauri/target/release/*.exe" |
+            Where-Object { $_.Name -notmatch '^(build|uninstall)' } |
+            Sort-Object Length -Descending | Select-Object -First 1
+          Write-Output "Portable exe: $($exe.FullName)"
+          Compress-Archive -Path $exe.FullName -DestinationPath "SupraDaProd_portable_x64.zip" -Force
+
+      - name: Upload portable zip
+        if: matrix.platform == 'windows-latest'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: SupraDaProd_portable_x64.zip
+
   build-android:
+    needs: prepare
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -107,14 +150,8 @@ jobs:
             -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass supradaprod2026 -keypass supradaprod2026 \
             -dname "CN=SupraDaProd, OU=DaProd, O=DaProd, L=Rome, S=Italy, C=IT"
-          cat > src-tauri/gen/android/keystore.properties <<EOF
-          storeFile=${{ github.workspace }}/release.keystore
-          storePassword=supradaprod2026
-          keyAlias=supradaprod
-          keyPassword=supradaprod2026
-          EOF
 
-      - name: Build Android APKs
+      - name: Build Android APKs (signed)
         env:
           TAURI_ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
           TAURI_ANDROID_KEYSTORE_PASSWORD: supradaprod2026
@@ -122,8 +159,17 @@ jobs:
           TAURI_ANDROID_KEY_PASSWORD: supradaprod2026
         run: npx tauri android build --apk --target aarch64 --target armv7
 
-      - name: Upload APKs to the release
+      - name: Collect APKs
+        run: |
+          mkdir -p apks
+          find src-tauri/gen/android/app/build/outputs/apk -name "*release*.apk" -not -name "*unsigned*" -exec cp {} apks/ \;
+          ls -la apks
+          cd apks
+          zip -r ../SupraDaProd_android_apk.zip .
+          cd ..
+
+      - name: Upload Android zip
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          files: src-tauri/gen/android/app/build/outputs/apk/**/release/*.apk
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: SupraDaProd_android_apk.zip

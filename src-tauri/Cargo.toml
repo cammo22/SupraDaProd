@@ -1,6 +1,6 @@
 [package]
 name = "supradaprod"
-version = "1.0.0"
+version = "0.0.1"
 description = "Tiny 100M-parameter text-to-image studio — draw with words or your voice."
 authors = ["cammo22"]
 edition = "2021"

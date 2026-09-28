@@ -1,7 +1,7 @@
 {
   "name": "supradaprod",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Tiny 100M-parameter text-to-image studio — draw with words or your voice. Powered by Supra2-IMG.",
   "type": "module",
   "scripts": {

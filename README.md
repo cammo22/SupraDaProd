@@ -26,9 +26,17 @@ Output 256×256, pipeline ONNX di riferimento: [Bartholomheow/Supra2-IMG-ONNX](h
 
 ## 📦 Download
 
-Vai alla pagina [**Releases**](../../releases): installer **Windows**, DMG **macOS**
-(Apple Silicon + Intel) e APK **Android** firmati, generati automaticamente da GitHub Actions
-ad ogni tag `v*`.
+👉 **[Release principale (rolling "latest")](../../releases/latest)** — un'unica release sempre aggiornata in automatico ad ogni tag:
+
+| Piattaforma | File |
+| --- | --- |
+| 🪟 Windows installer | `*_x64-setup.exe` / `*.msi` |
+| 🪟 **Windows portable** | `SupraDaProd_*_portable_x64.zip` — estrai ed esegui, zero installazione |
+| 🍎 macOS Apple Silicon | `*_aarch64.dmg` |
+| 🍎 macOS Intel | `*_x64.dmg` |
+| 🤖 Android | `SupraDaProd_*_apk.zip` (arm64 + armv7, firmato) |
+
+Link diretti sempre validi: `https://github.com/cammo22/SupraDaProd/releases/latest/download/<nome-file>`
 
 ## 🛠 Sviluppo
 
