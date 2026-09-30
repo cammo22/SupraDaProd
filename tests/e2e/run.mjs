@@ -38,12 +38,17 @@ if (!existsSync(resolve(MOCK, "Bartholomheow/Supra2-IMG-ONNX/dit.onnx"))) {
 }
 
 const hub = await startHub({ root: MOCK });
-const preview = spawn(resolve(ROOT, "node_modules/.bin/vite"), ["preview", "--port", "4173", "--strictPort"], { cwd: ROOT, stdio: "ignore", env: { ...process.env, E2E_CSP: "1" } });
-for (let i = 0; i < 50; i++) {
+const preview = spawn(resolve(ROOT, "node_modules/.bin/vite"), ["preview", "--host", "127.0.0.1", "--port", "4173", "--strictPort"], { cwd: ROOT, stdio: "ignore", env: { ...process.env, E2E_CSP: "1" } });
+let up = false;
+for (let i = 0; i < 100 && !up; i++) {
   try {
-    if ((await fetch(APP)).ok) break;
+    up = (await fetch(APP)).ok;
   } catch { /* not up yet */ }
-  await new Promise((r) => setTimeout(r, 200));
+  if (!up) await new Promise((r) => setTimeout(r, 200));
+}
+if (!up) {
+  console.error(`preview server did not come up on ${APP} — did you run \`npm run build\`?`);
+  process.exit(2);
 }
 
 const browser = await chromium.launch({
