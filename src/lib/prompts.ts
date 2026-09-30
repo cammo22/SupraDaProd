@@ -1,4 +1,4 @@
-// Surprise-me pool — English prompts (the model was trained on English captions).
+// "Surprise me" pool — English prompts (the model was trained on English captions).
 export const PROMPTS = [
   "a sea jellyfish floating in the pitch-black ocean depths",
   "a lighthouse above violet clouds at dusk",
@@ -30,15 +30,14 @@ export const PROMPTS = [
   "a fox made of autumn leaves running through morning fog",
   "a deep-sea diver discovering a sunken amusement park",
   "a treehouse city connected by rope bridges at dusk",
-  "a chef octopus making pizza in a underwater kitchen",
+  "a chef octopus making pizza in an underwater kitchen",
   "a glass rabbit filled with fireflies in a dark forest",
 ];
 
-export function randomPrompt(exclude) {
+export function randomPrompt(exclude = "", rand: () => number = Math.random): string {
   let p = exclude;
-  let guard = 0;
-  while (p === exclude && guard++ < 10) {
-    p = PROMPTS[Math.floor(Math.random() * PROMPTS.length)];
+  for (let guard = 0; p === exclude && guard < 10; guard++) {
+    p = PROMPTS[Math.floor(rand() * PROMPTS.length)];
   }
   return p;
 }

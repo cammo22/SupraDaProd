@@ -1,181 +1,233 @@
 name: Release
 
+# Tag `vX.Y.Z` → builds every platform and publishes a GitHub Release.
+# Run manually (Actions → Release → Run workflow) to get the build artifacts only.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Also publish a GitHub Release (needs a tag ref)"
+        type: boolean
+        default: false
 
-# Single rolling release: every tag updates the same "latest" release.
-env:
-  RELEASE_TAG: latest
+permissions:
+  contents: read
 
 jobs:
-  prepare:
+  version:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    outputs:
+      version: ${{ steps.v.outputs.version }}
     steps:
-      - name: Reset rolling release assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+      - id: v
         run: |
-          ASSET_IDS=$(gh api repos/${{ github.repository }}/releases/tags/$RELEASE_TAG --jq '.assets[].id' 2>/dev/null || true)
-          for id in $ASSET_IDS; do
-            gh api -X DELETE repos/${{ github.repository }}/releases/assets/$id || true
-          done
-          echo "rolling release $RELEASE_TAG is now empty"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then V="${GITHUB_REF_NAME#v}"; else V=$(node -p "require('./package.json').version"); fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Building $V"
 
-  build-desktop:
-    needs: prepare
-    permissions:
-      contents: write
+  windows:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: node scripts/set-version.mjs ${{ needs.version.outputs.version }}
+      # NSIS installer (per-user, IT/EN) + MSI, and the bare exe for the portable build.
+      - run: npx tauri build
+      - name: Collect
+        shell: pwsh
+        run: |
+          $v = "${{ needs.version.outputs.version }}"
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item (Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1) "out/SupraDaProd_${v}_windows_x64-setup.exe"
+          Copy-Item (Get-ChildItem src-tauri/target/release/bundle/msi/*.msi | Select-Object -First 1) "out/SupraDaProd_${v}_windows_x64.msi"
+          # The exe name contains "portable" → the app keeps every file next to itself.
+          Copy-Item src-tauri/target/release/supradaprod.exe "out/SupraDaProd_${v}_windows_x64_portable.exe"
+          Get-ChildItem out | Format-Table Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: out/*
+          if-no-files-found: error
+
+  macos:
+    needs: version
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: windows-latest
-            args: ""
-          - platform: macos-latest
-            args: "--target aarch64-apple-darwin"
-          - platform: macos-latest
-            args: "--target x86_64-apple-darwin"
-    runs-on: ${{ matrix.platform }}
+          - { runner: macos-latest, target: aarch64-apple-darwin, label: arm64 }
+          - { runner: macos-13, target: x86_64-apple-darwin, label: x64 }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
-
+          targets: ${{ matrix.target }}
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-
-      - name: Install frontend deps
-        run: npm ci
-
-      - name: Build & upload
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ env.RELEASE_TAG }}
-          releaseName: "⚡ SupraDaProd — Latest"
-          releaseBody: |
-            🎨 Text-to-image studio powered by **Supra2-IMG** (104M parameters, fully on-device).
-
-            | Platform | File |
-            | --- | --- |
-            | 🪟 Windows installer | `*_x64-setup.exe` or `*.msi` |
-            | 🪟 Windows portable | `SupraDaProd_*_portable_x64.zip` — unzip & run, no install |
-            | 🍎 macOS Apple Silicon | `*_aarch64.dmg` |
-            | 🍎 macOS Intel | `*_x64.dmg` |
-            | 🤖 Android | `SupraDaProd_*_apk.zip` (arm64 + armv7, signed) |
-
-            ℹ️ The model (~1 GB) is downloaded once on first launch and cached inside
-            the app — afterwards it works fully **offline**. Best with WebGPU;
-            automatic CPU fallback (slower).
-
-            This release is **rolling**: every new version replaces these files.
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
-
-      - name: Zip portable Windows exe
-        if: matrix.platform == 'windows-latest'
-        shell: pwsh
+      - run: npm ci
+      - run: node scripts/set-version.mjs ${{ needs.version.outputs.version }}
+      - run: npx tauri build --target ${{ matrix.target }} --bundles dmg
+      - name: Collect
         run: |
-          $exe = Get-ChildItem "src-tauri/target/release/*.exe" |
-            Where-Object { $_.Name -notmatch '^(build|uninstall)' } |
-            Sort-Object Length -Descending | Select-Object -First 1
-          Write-Output "Portable exe: $($exe.FullName)"
-          Compress-Archive -Path $exe.FullName -DestinationPath "SupraDaProd_portable_x64.zip" -Force
+          mkdir out
+          cp src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg "out/SupraDaProd_${{ needs.version.outputs.version }}_macos_${{ matrix.label }}.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.label }}
+          path: out/*
+          if-no-files-found: error
 
-      - name: Upload portable zip
-        if: matrix.platform == 'windows-latest'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload latest SupraDaProd_portable_x64.zip --clobber
-
-  build-android:
-    needs: prepare
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+  linux:
+    needs: version
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Linux deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential pkg-config libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - run: npm ci
+      - run: node scripts/set-version.mjs ${{ needs.version.outputs.version }}
+      - run: npx tauri build --bundles appimage,deb
+      - name: Collect
+        run: |
+          mkdir out
+          V=${{ needs.version.outputs.version }}
+          cp src-tauri/target/release/bundle/appimage/*.AppImage "out/SupraDaProd_${V}_linux_x64.AppImage"
+          cp src-tauri/target/release/bundle/deb/*.deb "out/SupraDaProd_${V}_linux_x64.deb"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: out/*
+          if-no-files-found: error
 
+  android:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi
-
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-
-      - name: Locate Android NDK
-        run: echo "ANDROID_NDK_HOME=$(ls -d $ANDROID_HOME/ndk/* | head -n 1)" >> $GITHUB_ENV
-
-      - name: Install frontend deps
-        run: npm ci
-
-      - name: Init Tauri Android project
-        run: npx tauri android init
-
-      - name: Grant microphone permission
+      - name: Android NDK
         run: |
-          FILE=src-tauri/gen/android/app/src/main/AndroidManifest.xml
-          sed -i 's#<application#<uses-permission android:name="android.permission.RECORD_AUDIO" /><application#' $FILE
-          grep -q RECORD_AUDIO $FILE
+          NDK="${ANDROID_NDK_LATEST_HOME:-$(ls -d "$ANDROID_HOME"/ndk/* | sort -V | tail -n 1)}"
+          echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
+          echo "NDK: $NDK"
+      - run: npm ci
+      - run: node scripts/set-version.mjs ${{ needs.version.outputs.version }}
+      - run: npx tauri android init --ci
+      - run: node scripts/patch-android.mjs
+      - run: npx tauri android build --apk --target aarch64 --target armv7 --ci
 
-      - name: Create signing keystore
-        run: |
-          keytool -genkeypair -v -keystore release.keystore -alias supradaprod \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass supradaprod2026 -keypass supradaprod2026 \
-            -dname "CN=SupraDaProd, OU=DaProd, O=DaProd, L=Rome, S=Italy, C=IT"
-
-      - name: Build Android APK
-        run: npx tauri android build --apk --target aarch64 --target armv7
-
-      - name: Sign APK with apksigner
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
-          APK_IN=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -n 1)
-          echo "signing $APK_IN"
-          "$BT/zipalign" -f -p 4 "$APK_IN" app-aligned.apk
-          "$BT/apksigner" sign \
-            --ks release.keystore \
-            --ks-pass pass:supradaprod2026 \
-            --ks-key-alias supradaprod \
-            --key-pass pass:supradaprod2026 \
-            --out "SupraDaProd_${VERSION}_android_universal.apk" \
-            app-aligned.apk
-          "$BT/apksigner" verify --print-certs "SupraDaProd_${VERSION}_android_universal.apk"
-
-      - name: Upload Android APK
+      # Signing: a stable key from repository secrets makes in-place updates work.
+      # Without secrets a throw-away key is generated (installable, but each build needs an uninstall first).
+      - name: Sign APK
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          for i in $(seq 1 40); do
-            if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then break; fi
-            echo "waiting for the rolling release '$RELEASE_TAG' to exist…"
-            sleep 15
-          done
-          gh release upload "$RELEASE_TAG" "SupraDaProd_${GITHUB_REF_NAME#v}_android_universal.apk" --clobber
+          set -euo pipefail
+          V=${{ needs.version.outputs.version }}
+          if [[ -n "${KS_B64:-}" ]]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            ALIAS="$KS_ALIAS"; SPASS="$KS_PASS"; KPASS="${KEY_PASS:-$KS_PASS}"
+          else
+            echo "::warning::No ANDROID_KEYSTORE_* secrets — signing with a temporary key (see README → Android signing)."
+            ALIAS=supradaprod; SPASS=$(openssl rand -hex 16); KPASS=$SPASS
+            keytool -genkeypair -keystore "$RUNNER_TEMP/release.keystore" -alias "$ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$SPASS" -keypass "$KPASS" -dname "CN=SupraDaProd, O=DaProd, C=IT"
+          fi
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
+          APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          echo "signing $APK"
+          "$BT/zipalign" -f -p 4 "$APK" "$RUNNER_TEMP/aligned.apk"
+          mkdir -p out
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.keystore" --ks-key-alias "$ALIAS" \
+            --ks-pass "pass:$SPASS" --key-pass "pass:$KPASS" --out "out/SupraDaProd_${V}_android.apk" "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" verify --print-certs "out/SupraDaProd_${V}_android.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: out/*
+          if-no-files-found: error
+
+  publish:
+    needs: [version, windows, macos, linux, android]
+    if: startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || inputs.publish)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Stable download names + checksums
+        run: |
+          cd dist
+          V=${{ needs.version.outputs.version }}
+          # Unversioned copies → https://github.com/<repo>/releases/latest/download/<name> never changes.
+          cp "SupraDaProd_${V}_windows_x64-setup.exe"    SupraDaProd-windows-setup.exe
+          cp "SupraDaProd_${V}_windows_x64_portable.exe" SupraDaProd-windows-portable.exe
+          cp "SupraDaProd_${V}_android.apk"              SupraDaProd-android.apk
+          cp "SupraDaProd_${V}_macos_arm64.dmg"          SupraDaProd-macos-arm64.dmg
+          cp "SupraDaProd_${V}_macos_x64.dmg"            SupraDaProd-macos-x64.dmg
+          cp "SupraDaProd_${V}_linux_x64.AppImage"       SupraDaProd-linux.AppImage
+          sha256sum * > SHA256SUMS.txt
+          ls -la
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            ## Download
+
+            | Platform | File |
+            | --- | --- |
+            | 🪟 Windows installer (per-user, IT/EN) | `SupraDaProd-windows-setup.exe` (or `.msi`) |
+            | 🪟 Windows **portable** (single exe, leaves no trace) | `SupraDaProd-windows-portable.exe` |
+            | 🤖 Android 8+ | `SupraDaProd-android.apk` |
+            | 🍎 macOS | `SupraDaProd-macos-arm64.dmg` · `SupraDaProd-macos-x64.dmg` |
+            | 🐧 Linux | `SupraDaProd-linux.AppImage` · `.deb` |
+
+            The model (~1 GB) is downloaded once on first use and stored on the device — after that everything works offline.

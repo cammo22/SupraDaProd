@@ -2,159 +2,254 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>SupraDaProd ✨</title>
-  <link rel="stylesheet" href="/style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.all.min.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#07070f" />
+  <title>SupraDaProd</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
 </head>
 <body>
-  <div class="aurora" aria-hidden="true">
-    <div class="blob b1"></div>
-    <div class="blob b2"></div>
-    <div class="blob b3"></div>
-    <div class="grain"></div>
-  </div>
+  <!-- Icon sprite -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-spark" viewBox="0 0 24 24"><path d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9L11 3zM19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z"/></symbol>
+      <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8.5 21h7"/></symbol>
+      <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-5 4 4 2.5-2.5L20 17"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9M13 5v4M7 15v4"/></symbol>
+      <symbol id="i-dice" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><circle cx="8.5" cy="8.5" r="1" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1" fill="currentColor"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10.5l5 5 5-5M4.5 20.5h15"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.4-9.4A5.1 5.1 0 0 1 12 6.3a5.1 5.1 0 0 1 9.4 4.8c-1.9 4.8-9.4 9.4-9.4 9.4z"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/></symbol>
+      <symbol id="i-reuse" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 6 6v3"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></symbol>
+      <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+      <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20.5 20.5-4.8-4.8"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5-12-7.5z" fill="currentColor"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="aurora" aria-hidden="true"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i></div>
 
   <div id="app">
     <header class="topbar">
       <div class="brand">
-        <span class="logo">⚡</span>
+        <span class="logo"><svg class="i"><use href="#i-bolt"/></svg></span>
         <div class="brand-text">
           <h1>SupraDaProd</h1>
-          <span class="tagline" data-i18n="tagline">100M parametri di pura fantasia</span>
+          <span class="tagline" data-i18n="tagline"></span>
         </div>
       </div>
       <div class="top-actions">
-        <div class="lang-switch" id="langSwitch" title="Language">
-          <button data-lang="it" class="on">🇮🇹</button>
-          <button data-lang="en">🇬🇧</button>
+        <span class="chip" id="backendChip" hidden></span>
+        <div class="seg lang-switch" id="langSwitch" role="group" aria-label="Language">
+          <button data-lang="it">IT</button><button data-lang="en">EN</button>
         </div>
+        <button class="icon-btn" id="btnSettings" data-i18n-title="settings"><svg class="i"><use href="#i-gear"/></svg></button>
       </div>
     </header>
 
-    <main id="views">
+    <div class="shell">
+      <nav class="nav" role="tablist">
+        <button class="tab on" data-view="create" role="tab"><svg class="i"><use href="#i-spark"/></svg><em data-i18n="tab_create"></em></button>
+        <button class="tab" data-view="voice" role="tab"><svg class="i"><use href="#i-mic"/></svg><em data-i18n="tab_voice"></em></button>
+        <button class="tab" data-view="gallery" role="tab"><svg class="i"><use href="#i-image"/></svg><em data-i18n="tab_gallery"></em><b class="badge" id="galleryBadge" hidden>0</b></button>
+      </nav>
 
-      <!-- ============ CREATE VIEW ============ -->
-      <section class="view on" id="view-create">
-        <div class="stage-wrap">
-          <div class="stage" id="stage">
-            <canvas id="canvas" width="256" height="256"></canvas>
-            <div class="stage-ring" id="stageRing" aria-hidden="true"></div>
-            <div class="stage-hint" id="stageHint" data-i18n="stage_hint">Scrivi, premi genera ✨</div>
-            <div class="stage-progress" id="stageProgress" hidden>
-              <div class="sp-title" id="spTitle">…</div>
-              <div class="sp-bar"><i id="spFill"></i></div>
-              <div class="sp-sub" id="spSub"></div>
+      <main id="views">
+        <!-- ============ CREATE ============ -->
+        <section class="view on" id="view-create">
+          <div class="create-grid">
+            <div class="stage-col">
+              <div class="stage" id="stage">
+                <canvas id="canvas" width="256" height="256"></canvas>
+                <div class="stage-hint" id="stageHint">
+                  <svg class="i big"><use href="#i-spark"/></svg>
+                  <p data-i18n="stage_hint"></p>
+                </div>
+                <div class="stage-progress" id="stageProgress" hidden>
+                  <div class="sp-title" id="spTitle"></div>
+                  <div class="bar"><i id="spFill"></i></div>
+                  <div class="sp-sub" id="spSub"></div>
+                </div>
+              </div>
+              <div class="result-actions" id="resultActions" hidden>
+                <button class="btn ghost" id="btnVariation"><svg class="i"><use href="#i-repeat"/></svg><span data-i18n="variation"></span></button>
+                <button class="btn ghost" id="btnSaveNow"><svg class="i"><use href="#i-download"/></svg><span data-i18n="save"></span></button>
+                <button class="btn ghost" id="btnSaveHd"><svg class="i"><use href="#i-download"/></svg><span data-i18n="save_hd"></span></button>
+              </div>
+            </div>
+
+            <div class="controls-col">
+              <div class="card">
+                <textarea id="prompt" rows="3" maxlength="500" data-i18n-ph="prompt_ph" spellcheck="false"></textarea>
+                <div class="row">
+                  <button class="btn ghost" id="btnRandom" data-i18n-title="random"><svg class="i"><use href="#i-dice"/></svg><span data-i18n="random"></span></button>
+                  <button class="btn ghost" id="btnTune" aria-expanded="false" data-i18n-title="tune"><svg class="i"><use href="#i-sliders"/></svg><span data-i18n="tune"></span></button>
+                  <button class="btn primary grow" id="btnGo"><svg class="i"><use href="#i-spark"/></svg><span id="btnGoLabel" data-i18n="generate"></span></button>
+                </div>
+                <div class="tune" id="tune" hidden>
+                  <label class="field"><span><span data-i18n="steps"></span> <b id="stepsVal">30</b></span>
+                    <input type="range" id="steps" min="10" max="50" step="5" value="30" /></label>
+                  <label class="field"><span><span data-i18n="guidance"></span> <b id="cfgVal">3.0</b></span>
+                    <input type="range" id="cfg" min="10" max="70" step="5" value="30" /></label>
+                  <div class="field seed-row">
+                    <span data-i18n="seed"></span>
+                    <input type="number" id="seed" value="0" min="0" max="999999999" inputmode="numeric" />
+                    <button class="icon-btn sm" id="btnShuffle" aria-label="shuffle"><svg class="i"><use href="#i-dice"/></svg></button>
+                  </div>
+                  <label class="check"><input type="checkbox" id="randomSeed" /><span data-i18n="seed_random"></span></label>
+                  <label class="field"><span data-i18n="negative"></span>
+                    <input type="text" id="negative" data-i18n-ph="negative_ph" spellcheck="false" maxlength="200" /></label>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="backend-chip" id="backendChip" hidden></div>
-        </div>
+        </section>
 
-        <div class="prompt-card">
-          <textarea id="prompt" rows="2" data-i18n-ph="prompt_ph" placeholder="Descrivi l'immagine che vuoi…"></textarea>
-          <div class="prompt-row">
-            <button class="btn ghost" id="btnRandom" title="Random">🎲 <span data-i18n="random">Random</span></button>
-            <button class="btn ghost" id="btnTune" title="Impostazioni">⚙️ <span data-i18n="tune">Regola</span></button>
-            <button class="btn primary grow" id="btnGo">✨ <span data-i18n="generate">Genera</span></button>
-          </div>
-
-          <div class="tune" id="tune" hidden>
-            <label><span data-i18n="steps">Passi</span> <b id="stepsVal">30</b>
-              <input type="range" id="steps" min="10" max="50" step="5" value="30" />
-            </label>
-            <label><span data-i18n="cfg">Fedeltà</span> <b id="cfgVal">3.0</b>
-              <input type="range" id="cfg" min="10" max="70" step="5" value="30" />
-            </label>
-            <label class="seed-row"><span>Seed</span>
-              <input type="number" id="seed" value="0" min="0" max="999999999" />
-              <button class="btn ghost tiny" id="btnShuffle">🎰</button>
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <!-- ============ VOICE VIEW ============ -->
-      <section class="view" id="view-voice">
-        <div class="voice-center">
-          <p class="voice-tip" id="voiceTip" data-i18n="voice_tip">Tieni premuto il microfono e parla.<br>Rilascia e la magia parte.</p>
-
-          <div class="hold-zone">
-            <div class="pulse-ring r1"></div>
-            <div class="pulse-ring r2"></div>
-            <button class="hold-btn" id="holdBtn" aria-label="record">
-              <span class="mic">🎙</span>
-              <span class="wave" id="wave" aria-hidden="true">
-                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-              </span>
-            </button>
-          </div>
-          <div class="rec-status" id="recStatus" data-i18n="rec_idle">Pronto — tieni premuto</div>
-
-          <div class="transcript-card" id="transcriptCard" hidden>
-            <div class="tc-head">📝 <span data-i18n="transcript">Trascrizione</span>
-              <span class="chip" id="sttEngine">whisper-tiny</span>
+        <!-- ============ VOICE ============ -->
+        <section class="view" id="view-voice">
+          <div class="voice-center">
+            <p class="voice-tip" id="voiceTip" data-i18n="voice_tip"></p>
+            <div class="hold-zone">
+              <i class="pulse r1"></i><i class="pulse r2"></i>
+              <button class="hold-btn" id="holdBtn" aria-label="Hold to talk"><svg class="i huge"><use href="#i-mic"/></svg></button>
             </div>
-            <textarea id="transcript" rows="3"></textarea>
-            <div class="prompt-row">
-              <button class="btn ghost" id="btnRedo">↺ <span data-i18n="redo">Riregistra</span></button>
-              <button class="btn primary grow" id="btnVoiceGo">✨ <span data-i18n="gen_from_voice">Genera immagine</span></button>
+            <div class="rec-status" id="recStatus"></div>
+            <label class="check"><input type="checkbox" id="translate" /><span data-i18n="voice_translate"></span></label>
+            <div class="card transcript" id="transcriptCard" hidden>
+              <div class="tc-head"><span data-i18n="transcript"></span><span class="chip">whisper-tiny</span></div>
+              <textarea id="transcript" rows="3" spellcheck="false"></textarea>
+              <div class="row">
+                <button class="btn ghost" id="btnRedo"><svg class="i"><use href="#i-repeat"/></svg><span data-i18n="redo"></span></button>
+                <button class="btn primary grow" id="btnVoiceGo"><svg class="i"><use href="#i-spark"/></svg><span data-i18n="gen_from_voice"></span></button>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- ============ GALLERY VIEW ============ -->
-      <section class="view" id="view-gallery">
-        <div class="gallery-head">
-          <h2 data-i18n="gallery">Galleria</h2>
-          <span class="chip" id="galleryCount">0</span>
-        </div>
-        <div class="grid" id="galleryGrid"></div>
-        <div class="empty" id="galleryEmpty">
-          <div class="empty-art">🖼</div>
-          <p data-i18n="gallery_empty">Le tue creazioni vivranno qui.</p>
-        </div>
-      </section>
-    </main>
-
-    <nav class="tabbar">
-      <button class="tab on" data-view="create"><span>✨</span><em data-i18n="tab_create">Crea</em></button>
-      <button class="tab" data-view="voice"><span>🎙</span><em data-i18n="tab_voice">Voce</em></button>
-      <button class="tab" data-view="gallery"><span>🖼</span><em data-i18n="tab_gallery">Galleria</em></button>
-    </nav>
-  </div>
-
-  <!-- ============ MODEL DOWNLOADER OVERLAY ============ -->
-  <div class="overlay" id="dlOverlay" hidden>
-    <div class="dl-card">
-      <h2>📦 <span data-i18n="dl_title">Un solo scaricamento, poi è tutto tuo</span></h2>
-      <p class="dl-sub" data-i18n="dl_sub">Il modello (1 GB) viene salvato dentro l'app — dopo funzionerà anche offline.</p>
-      <div class="dl-item"><span>DiT</span><div class="sp-bar"><i id="dlDit"></i></div><b id="dlDitTxt">0%</b></div>
-      <div class="dl-item"><span>T5</span><div class="sp-bar"><i id="dlT5"></i></div><b id="dlT5Txt">0%</b></div>
-      <div class="dl-item"><span>VAE</span><div class="sp-bar"><i id="dlVae"></i></div><b id="dlVaeTxt">0%</b></div>
-      <div class="dl-status" id="dlStatus"></div>
+        <!-- ============ GALLERY ============ -->
+        <section class="view" id="view-gallery">
+          <div class="gallery-head">
+            <h2 data-i18n="gallery"></h2>
+            <span class="chip" id="galleryCount">0</span>
+            <div class="grow"></div>
+            <label class="search"><svg class="i"><use href="#i-search"/></svg><input type="search" id="gallerySearch" data-i18n-ph="search_ph" /></label>
+            <button class="icon-btn" id="btnFavFilter" data-i18n-title="only_fav" aria-pressed="false"><svg class="i"><use href="#i-heart"/></svg></button>
+          </div>
+          <div class="grid" id="galleryGrid"></div>
+          <div class="empty" id="galleryEmpty">
+            <svg class="i huge"><use href="#i-image"/></svg>
+            <p data-i18n="gallery_empty"></p>
+          </div>
+        </section>
+      </main>
     </div>
   </div>
 
-  <!-- ============ IMAGE MODAL ============ -->
-  <div class="overlay" id="imgModal" hidden>
-    <div class="modal-card">
+  <!-- ============ MODEL DOWNLOAD ============ -->
+  <dialog id="dlDialog" class="sheet">
+    <h2 data-i18n="dl_title"></h2>
+    <p class="muted" data-i18n="dl_sub"></p>
+    <p class="muted" id="dlMobileHint" data-i18n="dl_mobile_hint" hidden></p>
+    <div id="dlParts" class="parts"></div>
+    <div class="dl-total">
+      <div class="bar big"><i id="dlFill"></i></div>
+      <div class="dl-meta"><span id="dlPct">0%</span><span id="dlInfo"></span></div>
+    </div>
+    <div class="dl-status" id="dlStatus"></div>
+    <div class="row end">
+      <button class="btn ghost" id="dlCancel" data-i18n="dl_cancel"></button>
+      <button class="btn primary" id="dlStart"><svg class="i"><use href="#i-download"/></svg><span data-i18n="dl_start"></span></button>
+    </div>
+  </dialog>
+
+  <!-- ============ IMAGE DETAIL ============ -->
+  <dialog id="imgDialog" class="sheet viewer">
+    <button class="icon-btn close" id="imgClose" data-i18n-title="close"><svg class="i"><use href="#i-x"/></svg></button>
+    <div class="viewer-stage">
+      <button class="icon-btn nav-l" id="imgPrev" aria-label="previous"><svg class="i"><use href="#i-left"/></svg></button>
       <img id="modalImg" alt="" />
-      <div class="modal-meta">
-        <p id="modalPrompt"></p>
-        <p class="modal-info" id="modalInfo"></p>
-        <div class="prompt-row">
-          <button class="btn ghost" id="btnSaveImg">💾 <span data-i18n="save">Salva</span></button>
-          <button class="btn ghost" id="btnReuse">♻️ <span data-i18n="reuse">Riusa</span></button>
-          <button class="btn danger" id="btnDelete">🗑</button>
-          <button class="btn primary" id="btnCloseModal">✕</button>
-        </div>
-      </div>
+      <button class="icon-btn nav-r" id="imgNext" aria-label="next"><svg class="i"><use href="#i-right"/></svg></button>
     </div>
-  </div>
+    <p class="modal-prompt" id="modalPrompt"></p>
+    <p class="muted small" id="modalInfo"></p>
+    <div class="row wrap">
+      <button class="btn ghost" id="btnFav"><svg class="i"><use href="#i-heart"/></svg><span data-i18n="favorite"></span></button>
+      <button class="btn ghost" id="btnReuse"><svg class="i"><use href="#i-reuse"/></svg><span data-i18n="reuse"></span></button>
+      <button class="btn ghost" id="btnModalVar"><svg class="i"><use href="#i-repeat"/></svg><span data-i18n="variation"></span></button>
+      <button class="btn ghost" id="btnModalSave"><svg class="i"><use href="#i-download"/></svg><span data-i18n="save"></span></button>
+      <button class="btn ghost" id="btnModalSaveHd"><svg class="i"><use href="#i-download"/></svg><span data-i18n="save_hd"></span></button>
+      <button class="btn danger" id="btnDelete"><svg class="i"><use href="#i-trash"/></svg></button>
+    </div>
+  </dialog>
 
-  <div class="toast" id="toast" hidden></div>
+  <!-- ============ SETTINGS ============ -->
+  <dialog id="settingsDialog" class="sheet">
+    <div class="sheet-head">
+      <h2 data-i18n="settings"></h2>
+      <button class="icon-btn" id="settingsClose" data-i18n-title="close"><svg class="i"><use href="#i-x"/></svg></button>
+    </div>
 
-  <script type="module" src="/js/app.js"></script>
+    <label class="field"><span data-i18n="st_backend"></span>
+      <select id="stBackend">
+        <option value="auto" data-i18n="st_backend_auto"></option>
+        <option value="webgpu" data-i18n="st_backend_webgpu"></option>
+        <option value="wasm" data-i18n="st_backend_wasm"></option>
+      </select></label>
+    <label class="field"><span data-i18n="st_memory"></span>
+      <select id="stMemory">
+        <option value="auto" data-i18n="st_memory_auto"></option>
+        <option value="fast" data-i18n="st_memory_fast"></option>
+        <option value="lean" data-i18n="st_memory_lean"></option>
+      </select></label>
+    <label class="field"><span data-i18n="st_export"></span>
+      <select id="stExport"><option value="256">256 px</option><option value="512">512 px</option><option value="1024">1024 px</option></select></label>
+    <label class="field"><span data-i18n="st_endpoint"></span>
+      <input type="url" id="stEndpoint" spellcheck="false" />
+      <small class="muted" data-i18n="st_endpoint_hint"></small></label>
+
+    <h3 data-i18n="st_storage"></h3>
+    <dl class="kv">
+      <dt data-i18n="st_model_size"></dt><dd id="stModelSize">—</dd>
+      <dt data-i18n="st_voice_size"></dt><dd id="stVoiceSize">—</dd>
+      <dt data-i18n="st_gallery_size"></dt><dd id="stGallerySize">—</dd>
+      <dt data-i18n="st_location"></dt><dd id="stLocation" class="mono">—</dd>
+    </dl>
+    <p class="muted small" id="stPortable" hidden data-i18n="st_portable"></p>
+    <div class="row wrap">
+      <button class="btn ghost" id="stOpenFolder" hidden><svg class="i"><use href="#i-folder"/></svg><span data-i18n="st_open_folder"></span></button>
+      <button class="btn danger ghost" id="stDelModel" data-i18n="st_delete_model"></button>
+      <button class="btn danger ghost" id="stDelVoice" data-i18n="st_delete_voice"></button>
+    </div>
+
+    <h3 data-i18n="st_about"></h3>
+    <dl class="kv">
+      <dt data-i18n="st_version"></dt><dd id="stVersion"></dd>
+      <dt>Runtime</dt><dd id="stRuntime"></dd>
+    </dl>
+    <p class="muted small" data-i18n="st_credits"></p>
+  </dialog>
+
+  <!-- ============ CONFIRM ============ -->
+  <dialog id="confirmDialog" class="sheet small">
+    <p id="confirmMsg"></p>
+    <div class="row end">
+      <button class="btn ghost" id="confirmNo" data-i18n="dl_cancel"></button>
+      <button class="btn danger" id="confirmYes"><svg class="i"><use href="#i-trash"/></svg><span data-i18n="delete"></span></button>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script type="module" src="/main.ts"></script>
 </body>
 </html>

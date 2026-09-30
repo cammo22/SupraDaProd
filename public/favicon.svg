@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="v" cx="22%" cy="18%" r="75%"><stop offset="0" stop-color="#8b6bff"/><stop offset="1" stop-color="#8b6bff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="c" cx="85%" cy="88%" r="70%"><stop offset="0" stop-color="#00e5ff"/><stop offset="1" stop-color="#00e5ff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="p" cx="78%" cy="20%" r="55%"><stop offset="0" stop-color="#ff5fd2" stop-opacity=".85"/><stop offset="1" stop-color="#ff5fd2" stop-opacity="0"/></radialGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9e9ff"/></linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="26"/></filter>
+    <clipPath id="r"><rect width="1024" height="1024" rx="228"/></clipPath>
+  </defs>
+  <g clip-path="url(#r)">
+    <rect width="1024" height="1024" fill="#0a0920"/>
+    <rect width="1024" height="1024" fill="url(#v)"/>
+    <rect width="1024" height="1024" fill="url(#c)"/>
+    <rect width="1024" height="1024" fill="url(#p)"/>
+    <!-- latent-noise grid fading into the picture: the "image condensing from noise" idea -->
+    <g fill="#fff" opacity=".10">
+      <rect x="64" y="64" width="34" height="34" rx="6"/><rect x="295" y="64" width="22" height="22" rx="6"/><rect x="449" y="64" width="34" height="34" rx="6"/><rect x="680" y="64" width="22" height="22" rx="6"/><rect x="834" y="64" width="34" height="34" rx="6"/><rect x="141" y="141" width="22" height="22" rx="6"/><rect x="372" y="141" width="34" height="34" rx="6"/><rect x="526" y="141" width="22" height="22" rx="6"/><rect x="757" y="141" width="34" height="34" rx="6"/><rect x="911" y="141" width="22" height="22" rx="6"/><rect x="64" y="218" width="22" height="22" rx="6"/><rect x="141" y="218" width="34" height="34" rx="6"/><rect x="449" y="218" width="22" height="22" rx="6"/><rect x="526" y="218" width="34" height="34" rx="6"/><rect x="834" y="218" width="22" height="22" rx="6"/><rect x="911" y="218" width="34" height="34" rx="6"/><rect x="295" y="372" width="34" height="34" rx="6"/><rect x="372" y="372" width="22" height="22" rx="6"/><rect x="680" y="372" width="34" height="34" rx="6"/><rect x="757" y="372" width="22" height="22" rx="6"/><rect x="64" y="449" width="34" height="34" rx="6"/><rect x="295" y="449" width="22" height="22" rx="6"/><rect x="449" y="449" width="34" height="34" rx="6"/><rect x="680" y="449" width="22" height="22" rx="6"/><rect x="834" y="449" width="34" height="34" rx="6"/><rect x="141" y="526" width="22" height="22" rx="6"/><rect x="372" y="526" width="34" height="34" rx="6"/><rect x="526" y="526" width="22" height="22" rx="6"/><rect x="757" y="526" width="34" height="34" rx="6"/><rect x="911" y="526" width="22" height="22" rx="6"/><rect x="64" y="603" width="22" height="22" rx="6"/><rect x="141" y="603" width="34" height="34" rx="6"/><rect x="449" y="603" width="22" height="22" rx="6"/><rect x="526" y="603" width="34" height="34" rx="6"/><rect x="834" y="603" width="22" height="22" rx="6"/><rect x="911" y="603" width="34" height="34" rx="6"/><rect x="295" y="757" width="34" height="34" rx="6"/><rect x="372" y="757" width="22" height="22" rx="6"/><rect x="680" y="757" width="34" height="34" rx="6"/><rect x="757" y="757" width="22" height="22" rx="6"/><rect x="64" y="834" width="34" height="34" rx="6"/><rect x="295" y="834" width="22" height="22" rx="6"/><rect x="449" y="834" width="34" height="34" rx="6"/><rect x="680" y="834" width="22" height="22" rx="6"/><rect x="834" y="834" width="34" height="34" rx="6"/><rect x="141" y="911" width="22" height="22" rx="6"/><rect x="372" y="911" width="34" height="34" rx="6"/><rect x="526" y="911" width="22" height="22" rx="6"/><rect x="757" y="911" width="34" height="34" rx="6"/><rect x="911" y="911" width="22" height="22" rx="6"/>
+    </g>
+    <path d="M590 130 300 560h190l-60 330 300-470H540z" fill="#7c5cff" filter="url(#glow)" opacity=".9"/>
+    <path d="M590 130 300 560h190l-60 330 300-470H540z" fill="url(#bolt)"/>
+    <path d="M800 190l18 50 50 18-50 18-18 50-18-50-50-18 50-18z" fill="#fff" opacity=".95"/>
+    <path d="M232 716l11 30 30 11-30 11-11 30-11-30-30-11 30-11z" fill="#fff" opacity=".8"/>
+  </g>
+</svg>
