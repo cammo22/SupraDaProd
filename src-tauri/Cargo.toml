@@ -1,7 +1,7 @@
 [package]
 name = "supradaprod"
-version = "0.0.3"
-description = "Tiny 100M-parameter text-to-image studio — draw with words or your voice."
+version = "1.0.0"
+description = "Text-to-image studio on your device — type it or say it. Powered by Supra2-IMG."
 authors = ["cammo22"]
 edition = "2021"
 rust-version = "1.77.2"
@@ -14,11 +14,16 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["protocol-asset"] }
-tauri-plugin-fs = "2"
-tauri-plugin-dialog = "2"
+tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+percent-encoding = "2"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-dialog = "2"
+
+[target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-android-fs = { version = "29", default-features = false, features = ["legacy-storage-permission"] }
 
 [profile.release]
 codegen-units = 1

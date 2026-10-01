@@ -1,21 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities: local gallery storage (app data) + save dialogs.",
+  "description": "The app talks to the Rust side only through its own store_* / export_* commands.",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "core:window:default",
-    "core:webview:default",
-    "core:event:default",
-    "fs:allow-appdata-read-recursive",
-    "fs:allow-appdata-write-recursive",
-    "fs:allow-mkdir",
-    "fs:allow-read-dir",
-    "fs:allow-read-file",
-    "fs:allow-write-file",
-    "fs:allow-remove",
-    "fs:allow-exists",
-    "dialog:default"
-  ]
+  "permissions": ["core:default"]
 }

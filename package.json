@@ -1,25 +1,32 @@
 {
   "name": "supradaprod",
   "private": true,
-  "version": "0.0.3",
-  "description": "Tiny 100M-parameter text-to-image studio — draw with words or your voice. Powered by Supra2-IMG.",
+  "version": "1.0.0",
+  "description": "Text-to-image studio on your device — type it or say it. Powered by Supra2-IMG (104M parameters, fully offline).",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "node tests/e2e/run.mjs",
+    "tauri": "tauri",
+    "icons": "node scripts/make-icon.mjs && tauri icon app-icon.png"
   },
   "dependencies": {
+    "@huggingface/transformers": "3.8.1",
+    "@noble/hashes": "^1.8.0",
     "@tauri-apps/api": "^2.9.0",
-    "@tauri-apps/plugin-dialog": "^2.4.0",
-    "@tauri-apps/plugin-fs": "^2.4.2"
+    "ort": "npm:onnxruntime-web@1.30.0"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@tauri-apps/cli": "^2.9.6",
-    "vite": "^7.1.11"
-  },
-  "allowScripts": {
-    "esbuild@0.28.2": true
+    "@webgpu/types": "^0.1.74",
+    "playwright-core": "^1.56.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.11",
+    "vitest": "^3.2.4"
   }
 }
