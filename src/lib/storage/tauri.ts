@@ -16,6 +16,12 @@ async function invoke<T>(cmd: string, args?: InvokeArgs, options?: InvokeOptions
   }
 }
 
+function toBase64(data: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < data.length; i += 0x8000) bin += String.fromCharCode(...data.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
 const enc = (p: string) => encodeURIComponent(validatePath(p));
 
 /** Real files on disk, served by the Rust `store_*` commands (see src-tauri/src/store.rs). */
@@ -33,19 +39,39 @@ export class TauriStore implements Store {
   }
 
   async readRange(path: string, offset: number, length: number) {
-    const buf = await invoke<ArrayBuffer>("store_read", { path: validatePath(path), offset, length });
-    return new Uint8Array(buf);
+    const buf = await invoke<ArrayBuffer | number[]>("store_read", { path: validatePath(path), offset, length });
+    return buf instanceof ArrayBuffer ? new Uint8Array(buf) : Uint8Array.from(buf as ArrayLike<number>);
+  }
+
+  /**
+   * Raw binary body when the webview supports it; base64 in a JSON argument when it does not
+   * (Android's WebView cannot hand request bodies to custom protocols → "expected a raw binary body").
+   * The first failure flips the mode for the rest of the session.
+   */
+  private rawBody = true;
+
+  private async put(path: string, data: Uint8Array, append: boolean) {
+    if (this.rawBody) {
+      try {
+        await invoke("store_write", data, { headers: { "x-path": enc(path), "x-append": append ? "1" : "0" } });
+        return;
+      } catch (e) {
+        if (!/raw binary body|missing x-path/i.test(errMsg(e))) throw e;
+        this.rawBody = false;
+      }
+    }
+    await invoke("store_write_b64", { path: validatePath(path), append, data: toBase64(data) });
   }
 
   async write(path: string, data: Uint8Array) {
-    await invoke("store_write", data, { headers: { "x-path": enc(path), "x-append": "0" } });
+    await this.put(path, data, false);
   }
 
   async openWriter(path: string, append: boolean): Promise<Writer> {
     if (!append) await this.write(path, new Uint8Array(0));
     return {
       write: async (chunk) => {
-        await invoke("store_write", chunk, { headers: { "x-path": enc(path), "x-append": "1" } });
+        await this.put(path, chunk, true);
       },
       close: async () => {},
     };
