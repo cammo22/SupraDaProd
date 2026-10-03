@@ -9,6 +9,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
 
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use percent_encoding::percent_decode_str;
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request, Response};
@@ -93,7 +94,27 @@ pub async fn store_read(
     Ok(Response::new(buf))
 }
 
+/// Append to / replace the file at `rel` (relative to the storage root).
+fn write_bytes(root: &Path, rel: &str, append: bool, data: &[u8]) -> Result<(), String> {
+    let p = resolve(root, rel)?;
+    if let Some(parent) = p.parent() {
+        io(fs::create_dir_all(parent))?;
+    }
+    let mut opts = OpenOptions::new();
+    opts.create(true);
+    if append {
+        opts.append(true);
+    } else {
+        opts.write(true).truncate(true);
+    }
+    let mut f = io(opts.open(&p))?;
+    io(f.write_all(data))?;
+    Ok(())
+}
+
 /// Raw-body command: the bytes are the request body, `x-path` / `x-append` are headers.
+/// Android's WebView cannot deliver request bodies to custom protocols, so there the frontend
+/// falls back to `store_write_b64`.
 #[tauri::command]
 pub async fn store_write(state: State<'_, Store>, request: Request<'_>) -> Result<(), String> {
     let InvokeBody::Raw(data) = request.body() else {
@@ -111,20 +132,21 @@ pub async fn store_write(state: State<'_, Store>, request: Request<'_>) -> Resul
         .decode_utf8()
         .map_err(|e| e.to_string())?;
     let append = header("x-append").as_deref() == Some("1");
-    let p = resolve(&state.root, &rel)?;
-    if let Some(parent) = p.parent() {
-        io(fs::create_dir_all(parent))?;
-    }
-    let mut opts = OpenOptions::new();
-    opts.create(true);
-    if append {
-        opts.append(true);
-    } else {
-        opts.write(true).truncate(true);
-    }
-    let mut f = io(opts.open(&p))?;
-    io(f.write_all(data))?;
-    Ok(())
+    write_bytes(&state.root, &rel, append, data)
+}
+
+/// Same as `store_write`, but the bytes travel base64-encoded in a normal JSON argument.
+#[tauri::command]
+pub async fn store_write_b64(
+    state: State<'_, Store>,
+    path: String,
+    append: bool,
+    data: String,
+) -> Result<(), String> {
+    let bytes = BASE64
+        .decode(data.as_bytes())
+        .map_err(|e| format!("bad base64: {e}"))?;
+    write_bytes(&state.root, &path, append, &bytes)
 }
 
 #[tauri::command]
@@ -237,5 +259,18 @@ mod tests {
         assert!(resolve(root, "../etc/passwd").is_err());
         assert!(resolve(root, "a/../../b").is_err());
         assert!(resolve(root, "/abs").is_err());
+    }
+
+    #[test]
+    fn writes_and_appends_inside_root() {
+        let root =
+            std::env::temp_dir().join(format!("supradaprod-store-test-{}", std::process::id()));
+        write_bytes(&root, "a/b.bin", false, b"hello ").unwrap();
+        write_bytes(&root, "a/b.bin", true, &BASE64.decode("d29ybGQ=").unwrap()).unwrap();
+        assert_eq!(fs::read(root.join("a/b.bin")).unwrap(), b"hello world");
+        write_bytes(&root, "a/b.bin", false, b"x").unwrap();
+        assert_eq!(fs::read(root.join("a/b.bin")).unwrap(), b"x");
+        assert!(write_bytes(&root, "../escape", false, b"x").is_err());
+        let _ = fs::remove_dir_all(&root);
     }
 }

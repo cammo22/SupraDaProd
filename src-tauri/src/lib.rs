@@ -55,6 +55,7 @@ pub fn run() {
             store::store_stat,
             store::store_read,
             store::store_write,
+            store::store_write_b64,
             store::store_remove,
             store::store_rename,
             store::store_list,
