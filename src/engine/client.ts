@@ -4,6 +4,7 @@ import { baseUrl, deviceMemoryGB, isAndroid, wasmThreads, webgpuAvailable } from
 import { type Manifest, SUPRA_DIR } from "../lib/models";
 import { type Store, readAll, readJson } from "../lib/storage/types";
 import type { Backend, EngineEvent, GenerateArgs, GenerateResult, InitArgs, ModelName } from "./protocol";
+import { errMsg } from "../lib/errors";
 
 export type BackendPref = "auto" | "webgpu" | "wasm";
 export type MemoryPref = "auto" | "fast" | "lean";
@@ -98,7 +99,7 @@ export class EngineClient {
     } catch (e) {
       if ((e as Error).name !== "AbortError") {
         // A crashed/out-of-memory worker can't be trusted any more.
-        if (/worker|memory|allocation|out of/i.test((e as Error).message)) this.dispose();
+        if (/worker|memory|allocation|out of/i.test(errMsg(e))) this.dispose();
       }
       throw e;
     } finally {

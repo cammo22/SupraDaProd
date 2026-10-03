@@ -5,6 +5,7 @@ import { type Key, t } from "../lib/i18n";
 import { formatBytes, formatDuration, isMobile } from "../lib/platform";
 import { type InstallProgress, type Manifest, type PartKey, installSupra, localStatus } from "../lib/models";
 import { settings } from "../lib/settings";
+import { errMsg } from "../lib/errors";
 
 const PARTS: PartKey[] = ["dit", "t5", "vae", "tok"];
 
@@ -83,7 +84,7 @@ function runSheet(ctx: Ctx, resolve: (m: Manifest) => void, reject: (e: Error) =
         statusEl.textContent = t("dl_paused");
         setButtons("paused");
       } else {
-        statusEl.textContent = t("dl_failed", { msg: (e as Error).message });
+        statusEl.textContent = t("dl_failed", { msg: errMsg(e) });
         statusEl.classList.add("err");
         setButtons("error");
       }
