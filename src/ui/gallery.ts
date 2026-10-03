@@ -6,6 +6,7 @@ import { upscalePng } from "../lib/image";
 import { exportImage, suggestName } from "../lib/export";
 import type { GalleryItem } from "../lib/gallery";
 import { settings } from "../lib/settings";
+import { errMsg } from "../lib/errors";
 
 export function initGallery(ctx: Ctx) {
   const grid = $("galleryGrid");
@@ -156,7 +157,7 @@ export function initGallery(ctx: Ctx) {
       const where = await exportImage(bytes, suggestName(it.prompt));
       if (where) toast(t("saved_to", { path: where }));
     } catch (e) {
-      toast(`${t("save_failed")}: ${(e as Error).message}`, { error: true });
+      toast(`${t("save_failed")}: ${errMsg(e)}`, { error: true });
     }
   };
   $("btnModalSave").addEventListener("click", () => void save(false));

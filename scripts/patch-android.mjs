@@ -3,7 +3,7 @@
 //   • RECORD_AUDIO / MODIFY_AUDIO_SETTINGS  → push-to-talk voice input
 //   • largeHeap                               → headroom for the ~1 GB of model data
 //   • adjustResize                            → the on-screen keyboard must not cover the prompt
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const file = resolve(import.meta.dirname, "../src-tauri/gen/android/app/src/main/AndroidManifest.xml");
@@ -20,6 +20,16 @@ if (!/android:largeHeap=/.test(xml)) xml = xml.replace("<application", '<applica
 if (!/android:windowSoftInputMode=/.test(xml)) xml = xml.replace("<activity", '<activity android:windowSoftInputMode="adjustResize"');
 
 writeFileSync(file, xml);
+
+// Launcher icons: copy ours over the template's default ones (mipmap-* + adaptive-icon background colour).
+const iconsSrc = resolve(import.meta.dirname, "../src-tauri/icons/android");
+const resDir = resolve(import.meta.dirname, "../src-tauri/gen/android/app/src/main/res");
+if (existsSync(iconsSrc)) {
+  cpSync(iconsSrc, resDir, { recursive: true, force: true });
+  console.log("launcher icons copied");
+} else {
+  console.warn("src-tauri/icons/android missing — default launcher icon kept");
+}
 for (const must of ["RECORD_AUDIO", "largeHeap", "adjustResize"]) {
   if (!xml.includes(must)) {
     console.error(`patch failed: ${must} missing`);

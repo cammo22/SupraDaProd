@@ -1,9 +1,19 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke, type InvokeArgs, type InvokeOptions } from "@tauri-apps/api/core";
+import { errMsg } from "../errors";
 import { type Entry, type Store, type Writer, validatePath } from "./types";
 
 interface StoreInfo {
   root: string;
   portable: boolean;
+}
+
+/** `invoke` that always rejects with a real Error (Rust returns bare strings). */
+async function invoke<T>(cmd: string, args?: InvokeArgs, options?: InvokeOptions): Promise<T> {
+  try {
+    return await tauriInvoke<T>(cmd, args, options);
+  } catch (e) {
+    throw e instanceof Error ? e : new Error(`${cmd}: ${errMsg(e)}`);
+  }
 }
 
 const enc = (p: string) => encodeURIComponent(validatePath(p));

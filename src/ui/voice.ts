@@ -6,6 +6,7 @@ import { pickLean } from "../engine/client";
 import { settings, update } from "../lib/settings";
 import { Recorder } from "../voice/recorder";
 import { WhisperClient } from "../voice/whisper";
+import { errMsg } from "../lib/errors";
 
 export function initVoice(ctx: Ctx) {
   const btn = $<HTMLButtonElement>("holdBtn");
@@ -95,7 +96,7 @@ export function initVoice(ctx: Ctx) {
       whisper?.dispose();
       whisper = null;
       setStatus(t("rec_idle"));
-      toast(`${t("error")}: ${(e as Error).message}`, { error: true });
+      toast(`${t("error")}: ${errMsg(e)}`, { error: true });
     } finally {
       ctx.busy = false;
     }

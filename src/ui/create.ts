@@ -12,6 +12,7 @@ import { formatDuration } from "../lib/platform";
 import { onChange, settings, update } from "../lib/settings";
 import { keepAwake } from "../lib/wakelock";
 import type { GalleryItem } from "../lib/gallery";
+import { errMsg } from "../lib/errors";
 
 const DISPLAY = 512;
 
@@ -224,7 +225,7 @@ export function initCreate(ctx: Ctx) {
       if (where) toast(t("saved_to", { path: where }));
     } catch (e) {
       console.error(e);
-      toast(`${t("save_failed")}: ${(e as Error).message}`, { error: true });
+      toast(`${t("save_failed")}: ${errMsg(e)}`, { error: true });
     }
   };
   el.saveNow.addEventListener("click", () => void save(false));
