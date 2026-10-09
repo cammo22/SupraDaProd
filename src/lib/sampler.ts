@@ -137,6 +137,122 @@ export function integrateHeun(z: Float32Array, v: Float32Array, vNext: Float32Ar
   for (let j = 0; j < z.length; j++) out[j] = z[j] + h * (v[j] + vNext[j]);
 }
 
+/* ---------------- rectified flow → noise level ---------------- */
+
+/** σ = 1 − t for the flow pipelines (noise at t = 0, data at t = 1). */
+export const flowSigma = (t: number): number => 1 - t;
+
+/** Data estimate of a velocity model: D = z + σ·v. */
+export function dataFromVelocity(z: Float32Array, v: Float32Array, sigma: number, out: Float32Array): void {
+  for (let j = 0; j < z.length; j++) out[j] = z[j] + sigma * v[j];
+}
+
+/* ---------------- epsilon diffusion (SD 1.x / 2.x) ---------------- */
+
+export interface BetaSchedule {
+  beta_start: number;
+  beta_end: number;
+  num_train_timesteps: number;
+  beta_schedule?: string; // "scaled_linear" (SD 1.x) or "linear"
+}
+
+export interface SigmaSchedule {
+  /** Noise levels, from the most noisy down to (and including) 0. */
+  sigmas: Float32Array;
+  /** √ᾱ of each step — the UNet expects the *unscaled* latent x·√ᾱ. */
+  alphas: Float32Array;
+  /** Training timestep (the UNet's `timestep` input) matching each σ. */
+  timesteps: Float32Array;
+}
+
+/**
+ * The classic Stable-diffusion beta schedule (β = (β₀ + (β₁−β₀)·i/(T−1))² for
+ * "scaled_linear") turned into the σ / √ᾱ pairs the samplers need.
+ */
+export function betaSigmas(cfg: BetaSchedule): Float32Array {
+  const T = cfg.num_train_timesteps;
+  const scaled = (cfg.beta_schedule ?? "scaled_linear") !== "linear";
+  const out = new Float32Array(T + 1);
+  let alphaCumprod = 1;
+  for (let i = 0; i < T; i++) {
+    const lin = cfg.beta_start + ((cfg.beta_end - cfg.beta_start) * i) / (T - 1);
+    const beta = scaled ? lin * lin : lin;
+    alphaCumprod *= 1 - beta;
+    out[i] = Math.sqrt((1 - alphaCumprod) / alphaCumprod);
+  }
+  out[T] = 0; // the final "denoised" level
+  return out;
+}
+
+/**
+ * Picks `steps` evenly spaced noise levels the way diffusers does for SD 1.x
+ * ("leading" spacing: every ⌊T/steps⌋ training level, walked from the noisiest
+ * down) and appends σ = 0 so the last step lands on the image.
+ */
+export function sigmaSchedule(all: Float32Array, steps: number, karras = false): SigmaSchedule {
+  const train = all.length - 1;
+  const stepRatio = Math.max(1, Math.floor(train / steps));
+  const picked: number[] = [];
+  const pickedT: number[] = [];
+  for (let k = 0; k < steps; k++) {
+    const idx = Math.min(train, (steps - 1 - k) * stepRatio);
+    picked.push(all[idx]);
+    pickedT.push(idx);
+  }
+  picked.push(0);
+  pickedT.push(0);
+
+  let sigmas = Float32Array.from(picked);
+  let timesteps = Float32Array.from(pickedT);
+  if (karras) {
+    // Karras et al.: spend the steps where they matter (ρ = 7, bounds from the schedule).
+    const sMin = all[0];
+    const sMax = picked[0];
+    const rho = 7;
+    const minInv = sMin ** (1 / rho);
+    const maxInv = sMax ** (1 / rho);
+    sigmas = Float32Array.from({ length: steps + 1 }, (_, i) =>
+      i === steps ? 0 : (maxInv + (i / (steps - 1)) * (minInv - maxInv)) ** rho,
+    );
+    timesteps = Float32Array.from(sigmas, (s) => sigmaToTimestep(all, s));
+  }
+  const alphas = Float32Array.from(sigmas, (s) => 1 / Math.sqrt(s * s + 1));
+  return { sigmas, alphas, timesteps };
+}
+
+/**
+ * Inverse of the σ table: the (fractional) training timestep whose noise level
+ * is `sigma`, interpolated in log σ like diffusers' `_sigma_to_t`.
+ */
+export function sigmaToTimestep(all: Float32Array, sigma: number): number {
+  const train = all.length - 1;
+  if (sigma <= 0) return 0;
+  if (sigma <= all[0]) return 0;
+  if (sigma >= all[train - 1]) return train - 1;
+  let lo = 0;
+  let hi = train - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (all[mid] <= sigma) lo = mid;
+    else hi = mid;
+  }
+  const a = Math.log(all[lo]);
+  const b = Math.log(all[hi]);
+  const w = b > a ? (Math.log(sigma) - a) / (b - a) : 0;
+  return lo + Math.min(1, Math.max(0, w));
+}
+
+/** Data estimate of an epsilon model in σ-space: D = x − σ·ε. */
+export function dataFromEps(x: Float32Array, eps: Float32Array, sigma: number, out: Float32Array): void {
+  for (let j = 0; j < x.length; j++) out[j] = x[j] - sigma * eps[j];
+}
+
+/** Scales the raw diffusers latent (√ᾱ·x₀ + √(1−ᾱ)·ε) into σ-space. */
+export function toSigmaSpace(z: Float32Array, alphaSqrt: number, out: Float32Array): void {
+  const inv = 1 / alphaSqrt;
+  for (let j = 0; j < z.length; j++) out[j] = z[j] * inv;
+}
+
 /** State of the multistep solver (allocate once per generation). */
 export interface IntegratorState {
   prevData: Float32Array;
@@ -156,28 +272,26 @@ export function resetIntegratorState(st: IntegratorState): void {
 }
 
 /**
- * DPM-Solver++(2M) — Lu et al., "DPM-Solver++" — specialised to the rectified
- * flow parameterisation used here. With σ = 1 − t the probability-flow ODE is
+ * DPM-Solver++(2M) — Lu et al., "DPM-Solver++" — in the noise-level (σ) form
+ * shared by both pipelines:
  *
- *     dz/dσ = (z − D)/σ ,   D = z + σ·v          (the data estimate)
+ *     dz/dσ = (z − D)/σ ,      σ = noise level (decreasing), D = data estimate
  *
- * which is exactly the semi-linear form the solver was derived for: each step is
- * exact for a constant D and second order otherwise, at one network eval per
- * step (i.e. the same cost as Euler, but a much better image at low step counts).
+ * This covers rectified flow (σ = 1 − t, D = z + σ·v) and epsilon-prediction
+ * diffusion (σ = √((1−ᾱ)/ᾱ), D = z − σ·ε) alike: every step is exact for a
+ * constant D and second order otherwise, at one network eval per step — i.e. the
+ * same cost as Euler, but a much better image at low step counts.
  */
 export function integrateDpmpp2m(
   st: IntegratorState,
   z: Float32Array,
-  v: Float32Array,
-  t: number,
-  tNext: number,
+  data: Float32Array,
+  sigma: number,
+  sigmaNext: number,
   out: Float32Array,
 ): void {
   const n = z.length;
-  const sigma = 1 - t;
-  const sigmaNext = 1 - tNext;
-  const data = st.data;
-  for (let j = 0; j < n; j++) data[j] = z[j] + sigma * v[j];
+  st.data.set(data);
 
   if (sigmaNext <= 0) {
     // σ → 0: the exponential integrator degenerates to "take the data estimate".
@@ -217,6 +331,53 @@ export function halfToFloat(h: number): number {
   if (e === 0) return s * 2 ** -14 * (m / 1024);
   if (e === 0x1f) return m ? NaN : s * Infinity;
   return s * 2 ** (e - 15) * (1 + m / 1024);
+}
+
+// Scratch buffers for the float32 → float16 bit dance.
+const f32buf = new Float32Array(1);
+const i32buf = new Int32Array(f32buf.buffer);
+
+/**
+ * Float → half precision bits (round to nearest, even). Same as the Float16Array
+ * the platform may provide, but available everywhere ort-web runs.
+ */
+export function floatToHalf(value: number): number {
+  f32buf[0] = value;
+  const x = i32buf[0];
+  const sign = (x >>> 31) << 15;
+  const exp = (x >>> 23) & 0xff;
+  const mant = x & 0x7fffff;
+  if (exp === 0xff) return sign | 0x7c00 | (mant ? 0x200 : 0); // Inf / NaN
+  const e = exp - 127 + 15;
+  if (e >= 0x1f) return sign | 0x7c00; // overflow → Inf
+  if (e <= 0) {
+    if (e < -10) return sign; // too small → ±0
+    const m = mant | 0x800000;
+    const shift = 1 - e;
+    let out = m >>> shift;
+    const rem = m & ((1 << shift) - 1);
+    const half = 1 << (shift - 1);
+    if (rem > half || (rem === half && (out & 1))) out++;
+    return sign | out;
+  }
+  let m = mant >>> 13;
+  let ee = e;
+  const rem = mant & 0x1fff;
+  if (rem > 0x1000 || (rem === 0x1000 && (m & 1))) {
+    m++;
+    if (m === 0x400) {
+      m = 0;
+      if (++ee >= 0x1f) return sign | 0x7c00;
+    }
+  }
+  return sign | (ee << 10) | m;
+}
+
+/** Packs a float32 vector into the half-precision bits a fp16 model expects. */
+export function toHalfBits(src: ArrayLike<number>): Uint16Array {
+  const out = new Uint16Array(src.length);
+  for (let i = 0; i < src.length; i++) out[i] = floatToHalf(src[i]);
+  return out;
 }
 
 /** Normalises whatever typed array ORT hands back into Float32. */

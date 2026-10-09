@@ -58,41 +58,52 @@ t5 = h.make_graph(
 save(t5, "t5.onnx")
 
 # ---- DiT: v = tanh(mean(ctx)·W + B + t·0.1) - z  (an ODE that converges to an image) --
-dit = h.make_graph(
-    [
-        h.make_node("ReduceMean", ["ctx"], ["m"], axes=[1, 2], keepdims=1),  # [1,1,1]
-        h.make_node("ReduceSum", ["ctx_mask", "ax1"], ["ms"], keepdims=1),  # [1,1]
-        h.make_node("Reshape", ["m", "s1111"], ["m4"]),
-        h.make_node("Reshape", ["ms", "s1111"], ["ms4"]),
-        h.make_node("Reshape", ["t", "s1111"], ["t4"]),
-        h.make_node("Mul", ["m4", "W"], ["mw"]),
-        h.make_node("Mul", ["ms4", "k01"], ["msk"]),
-        h.make_node("Mul", ["t4", "k01"], ["tk"]),
-        h.make_node("Add", ["mw", "B"], ["a1"]),
-        h.make_node("Add", ["a1", "msk"], ["a2"]),
-        h.make_node("Add", ["a2", "tk"], ["a3"]),
-        h.make_node("Tanh", ["a3"], ["target"]),
-        h.make_node("Sub", ["target", "z"], ["v"]),
-    ],
-    "dit",
-    [
-        h.make_tensor_value_info("z", TP.FLOAT, [1, C, S, S]),
-        h.make_tensor_value_info("t", TP.FLOAT, [1]),
-        h.make_tensor_value_info("ctx", TP.FLOAT, [1, L, D]),
-        h.make_tensor_value_info("ctx_mask", TP.FLOAT, [1, L]),
-    ],
-    [h.make_tensor_value_info("v", TP.FLOAT, [1, C, S, S])],
-    [
-        nh.from_array(np.array([1], dtype=np.int64), "ax1"),
-        nh.from_array(np.array([1, 1, 1, 1], dtype=np.int64), "s1111"),
-        # Unused ballast so the file is big enough (~6 MB) to exercise chunked / resumed downloads.
-        init("ballast", rng.normal(0, 1, (1_500_000,))),
-        init("W", rng.normal(0, 4, (1, C, 1, 1))),
-        init("B", rng.normal(0, 0.8, (1, C, S, S))),
-        init("k01", np.array([0.02], dtype=np.float32).reshape(1, 1, 1, 1)),
-    ],
-)
-save(dit, "dit.onnx")
+# Two flavours with the *same* weights:
+#   dit.onnx     → fixed batch of 1 (the default path, one call per branch)
+#   dit-dyn.onnx → dynamic batch (lets the e2e check batched guidance end to end)
+W = init("W", rng.normal(0, 4, (1, C, 1, 1)))
+B = init("B", rng.normal(0, 0.8, (1, C, S, S)))
+k01 = init("k01", np.array([0.02], dtype=np.float32).reshape(1, 1, 1, 1))
+ax1 = nh.from_array(np.array([1], dtype=np.int64), "ax1")
+ax123 = nh.from_array(np.array([1, 2, 3], dtype=np.int64), "ax123")
+ax12 = nh.from_array(np.array([1, 2], dtype=np.int64), "ax12")
+# Unused ballast so the file is big enough (~6 MB) to exercise chunked / resumed downloads.
+ballast = init("ballast", rng.normal(0, 1, (1_500_000,)))
+
+dit_ops = [
+    h.make_node("ReduceMean", ["ctx"], ["m"], axes=[1, 2], keepdims=1),  # [B,1,1]
+    h.make_node("ReduceSum", ["ctx_mask", "ax1"], ["ms"], keepdims=1),  # [B,1]
+    h.make_node("Unsqueeze", ["t", "ax123"], ["t4"]),  # [B,1,1,1]
+    h.make_node("Unsqueeze", ["ms", "ax12"], ["ms4"]),  # [B,1,1,1]
+    h.make_node("Mul", ["m", "W"], ["mw"]),  # [B,C,1,1]
+    h.make_node("Mul", ["ms4", "k01"], ["msk"]),
+    h.make_node("Mul", ["t4", "k01"], ["tk"]),
+    h.make_node("Add", ["mw", "B"], ["a1"]),
+    h.make_node("Add", ["a1", "msk"], ["a2"]),
+    h.make_node("Add", ["a2", "tk"], ["a3"]),
+    h.make_node("Tanh", ["a3"], ["target"]),
+    h.make_node("Sub", ["target", "z"], ["v"]),
+]
+dit_weights = [ax1, ax123, ax12, ballast, W, B, k01]
+
+
+def dit_model(batch, name):
+    return h.make_graph(
+        dit_ops,
+        name,
+        [
+            h.make_tensor_value_info("z", TP.FLOAT, [batch, C, S, S]),
+            h.make_tensor_value_info("t", TP.FLOAT, [batch]),
+            h.make_tensor_value_info("ctx", TP.FLOAT, [batch, L, D]),
+            h.make_tensor_value_info("ctx_mask", TP.FLOAT, [batch, L]),
+        ],
+        [h.make_tensor_value_info("v", TP.FLOAT, [batch, C, S, S])],
+        dit_weights,
+    )
+
+
+save(dit_model(1, "dit"), "dit.onnx")
+save(dit_model(None, "dit-dyn"), "dit-dyn.onnx")
 
 # ---- VAE decoder: 1x1 conv (4→3) + nearest upsample ×8 ----------------------
 vae = h.make_graph(

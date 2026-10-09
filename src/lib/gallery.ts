@@ -15,6 +15,10 @@ export interface GalleryItem {
   /** Integrator + guidance rescale used (2.x; absent in older items). */
   solver?: Solver;
   cfgRescale?: number;
+  /** Which model painted it (2.x; older items are all Supra2-IMG). */
+  model?: string;
+  /** Output resolution in pixels (2.x). */
+  size?: number;
   date: string;
   fav?: boolean;
   /** Only in memory: the image could not be written to disk. */
@@ -50,6 +54,8 @@ export class Gallery {
         cfg: r.cfg ?? 0,
         solver: isSolver(r.solver) ? r.solver : undefined,
         cfgRescale: typeof r.cfgRescale === "number" ? r.cfgRescale : undefined,
+        model: typeof r.model === "string" ? r.model : undefined,
+        size: typeof r.size === "number" ? r.size : undefined,
         date: r.date ?? new Date(0).toISOString(),
         fav: !!r.fav,
       }));

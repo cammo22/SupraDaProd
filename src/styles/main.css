@@ -68,6 +68,26 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; background: 
 .top-actions { display: flex; align-items: center; gap: 8px; }
 
 .chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; background: var(--card-2); border: 1px solid var(--brd); color: var(--dim); white-space: nowrap; }
+.chip.warn { color: #ffd27a; border-color: rgba(255, 196, 92, .45); background: rgba(255, 196, 92, .12); }
+.model-chip { gap: 6px; color: var(--txt); background: var(--card); cursor: pointer; transition: background .15s, border-color .15s; max-width: 42vw; }
+.model-chip:hover { background: var(--card-2); }
+.model-chip.missing { border-color: rgba(255, 196, 92, .45); }
+.model-chip span { overflow: hidden; text-overflow: ellipsis; }
+.i.sm { width: 15px; height: 15px; }
+.i.caret { transform: rotate(90deg); opacity: .6; }
+
+/* ---------- model selector ---------- */
+.models { display: grid; gap: 12px; margin: 16px 0 12px; }
+.model-card { display: grid; gap: 6px; padding: 14px; border-radius: 18px; border: 1px solid var(--brd); background: var(--card); }
+.model-card.on { border-color: rgba(124, 92, 255, .65); box-shadow: 0 0 0 1px rgba(124, 92, 255, .35) inset; }
+.model-card.off { opacity: .72; }
+.model-card header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.model-card header b { font-size: 16px; }
+.model-card .bar { height: 4px; margin: 2px 0; }
+.model-card .bar i { transition: width .3s ease; }
+.model-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.model-actions .btn { padding: 8px 14px; font-size: 13.5px; }
+.model-actions .btn[disabled] { opacity: .5; }
 .seg { display: flex; background: var(--card); border: 1px solid var(--brd); border-radius: 999px; padding: 3px; gap: 2px; }
 .seg button { padding: 4px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--dim); }
 .seg button.on { background: var(--grad); color: #fff; }

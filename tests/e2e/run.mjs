@@ -32,7 +32,7 @@ const assert = (c, m) => {
   if (!c) throw new Error(m || "assertion failed");
 };
 
-if (!existsSync(resolve(MOCK, "Bartholomheow/Supra2-IMG-ONNX/dit.onnx"))) {
+if (!existsSync(resolve(MOCK, "Bartholomheow/Supra2-IMG-ONNX/dit-dyn.onnx"))) {
   const r = spawnSync("python3", [resolve(ROOT, "tests/e2e/make-mock-models.py"), resolve(MOCK, "Bartholomheow/Supra2-IMG-ONNX")], { stdio: "inherit" });
   if (r.status !== 0) process.exit(1);
 }
@@ -301,6 +301,25 @@ await step("solvers: DPM++ 2M is the default, euler still reproduces, both are d
   await generate(page, "solver check", { seed: 21 });
   assert((await canvasHash(page)) !== plain, "cfg rescale should influence the image");
   await ctx.close();
+});
+
+await step("batched guidance: both branches in one DiT call give the exact same image", async () => {
+  const fixed = await newApp({ steps: 6 });
+  await generate(fixed.page, "batch check", { seed: 33 });
+  const a = await canvasHash(fixed.page);
+  await fixed.ctx.close();
+
+  // Same weights, but a graph that accepts a batch of 2 → the worker keeps one call per step.
+  hub.state.dynamicBatch = true;
+  try {
+    const dyn = await newApp({ steps: 6 });
+    await generate(dyn.page, "batch check", { seed: 33 });
+    const b = await canvasHash(dyn.page);
+    assert(a === b, "batched guidance must produce the same pixels as two calls");
+    await dyn.ctx.close();
+  } finally {
+    hub.state.dynamicBatch = false;
+  }
 });
 
 await step("webgpu backend (when the browser offers it) matches the wasm result closely", async () => {

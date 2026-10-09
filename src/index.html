@@ -33,6 +33,9 @@
       <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20.5 20.5-4.8-4.8"/></symbol>
       <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
       <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5-12-7.5z" fill="currentColor"/></symbol>
+      <symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 2.8 8 4.4v9.6l-8 4.4-8-4.4V7.2l8-4.4z"/><path d="m4 7.2 8 4.4 8-4.4M12 11.6V21"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 13 5 5 9-11"/></symbol>
+      <symbol id="i-trash2" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13"/></symbol>
     </defs>
   </svg>
 
@@ -48,6 +51,7 @@
         </div>
       </div>
       <div class="top-actions">
+        <button class="chip model-chip" id="modelChip" data-i18n-title="models"><svg class="i sm"><use href="#i-cube"/></svg><span id="modelChipName">Supra2-IMG</span><svg class="i sm caret"><use href="#i-right"/></svg></button>
         <span class="chip" id="backendChip" hidden></span>
         <div class="seg lang-switch" id="langSwitch" role="group" aria-label="Language">
           <button data-lang="it">IT</button><button data-lang="en">EN</button>
@@ -113,6 +117,9 @@
                     <small class="muted" id="costHint"></small></label>
                   <label class="field"><span><span data-i18n="cfg_rescale"></span> <b id="rescaleVal">0%</b></span>
                     <input type="range" id="cfgRescale" min="0" max="10" step="1" value="0" /></label>
+                  <label class="field" id="sizeField" hidden><span data-i18n="resolution"></span>
+                    <select id="size"></select></label>
+                  <label class="check" id="karrasField" hidden><input type="checkbox" id="karras" /><span data-i18n="karras"></span></label>
                   <div class="field seed-row">
                     <span data-i18n="seed"></span>
                     <input type="number" id="seed" value="0" min="0" max="999999999" inputmode="numeric" />
@@ -146,10 +153,22 @@
     </div>
   </div>
 
+  <!-- ============ MODELS ============ -->
+  <dialog id="modelsDialog" class="sheet">
+    <div class="sheet-head">
+      <h2 data-i18n="models"></h2>
+      <button class="icon-btn" id="modelsClose" data-i18n-title="close"><svg class="i"><use href="#i-x"/></svg></button>
+    </div>
+    <p class="muted" data-i18n="m_intro"></p>
+    <div id="modelsList" class="models"></div>
+    <p class="muted small" id="modelsHint"></p>
+    <p class="muted small" id="modelsFoot"></p>
+  </dialog>
+
   <!-- ============ MODEL DOWNLOAD ============ -->
   <dialog id="dlDialog" class="sheet">
-    <h2 data-i18n="dl_title"></h2>
-    <p class="muted" data-i18n="dl_sub"></p>
+    <h2 id="dlTitle" data-i18n="dl_title"></h2>
+    <p class="muted" id="dlSub" data-i18n="dl_sub"></p>
     <p class="muted" id="dlMobileHint" data-i18n="dl_mobile_hint" hidden></p>
     <div id="dlParts" class="parts"></div>
     <div class="dl-total">
@@ -209,8 +228,8 @@
       <small class="muted" data-i18n="st_endpoint_hint"></small></label>
 
     <h3 data-i18n="st_storage"></h3>
+    <dl class="kv" id="stModels"></dl>
     <dl class="kv">
-      <dt data-i18n="st_model_size"></dt><dd id="stModelSize">—</dd>
       <dt data-i18n="st_gallery_size"></dt><dd id="stGallerySize">—</dd>
       <dt data-i18n="st_location"></dt><dd id="stLocation" class="mono">—</dd>
     </dl>

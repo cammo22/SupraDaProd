@@ -1,8 +1,66 @@
+describe("stable-diffusion noise schedule", () => {
+  // β: 0.00085 → 0.012, 1000 train steps, "scaled_linear" (SD 1.x defaults)
+  const cfg = { beta_start: 0.00085, beta_end: 0.012, num_train_timesteps: 1000, beta_schedule: "scaled_linear" };
+  const all = betaSigmas(cfg);
+
+  it("reproduces the diffusers sigma table", () => {
+    expect(all).toHaveLength(1001);
+    expect(all[0]).toBeCloseTo(0.00085, 8); // t = 0 (least noisy)
+    expect(all[999]).toBeCloseTo(0.2302643413, 6); // t = 999 (noisiest)
+    expect(all[950]).toBeCloseTo(0.2143401320, 6);
+    expect(all[1000]).toBe(0);
+  });
+
+  it("picks 'leading' timesteps like diffusers (T // steps apart, noisiest first)", () => {
+    const { sigmas, alphas } = sigmaSchedule(all, 20);
+    const expected = [0.2143401320, 0.1985547403, 0.1832362441, 0.1683846492];
+    expected.forEach((v, i) => expect(sigmas[i]).toBeCloseTo(v, 7));
+    expect(sigmas[19]).toBeCloseTo(0.00085, 8);
+    expect(sigmas[20]).toBe(0); // the last "step" lands on the image
+    expect(alphas[0]).toBeCloseTo(0.9777915, 6); // 1/√(σ²+1)
+    expect(Array.from(sigmas).every((s, i) => i === 0 || s <= sigmas[i - 1])).toBe(true);
+  });
+
+  it("can spend the steps the Karras way", () => {
+    const { sigmas, alphas } = sigmaSchedule(all, 20, true);
+    const expected = [0.2143401320, 0.1747573481, 0.1416130804, 0.1140098126];
+    expected.forEach((v, i) => expect(sigmas[i]).toBeCloseTo(v, 7));
+    expect(sigmas[19]).toBeCloseTo(0.00085, 8);
+    expect(sigmas[20]).toBe(0);
+    expect(alphas[2]).toBeCloseTo(0.9901207, 6);
+  });
+
+  it("turns latents into σ-space and epsilon into a data estimate", () => {
+    const z = Float32Array.of(2, 4);
+    const out = new Float32Array(2);
+    toSigmaSpace(z, 0.5, out); // x = z/√ᾱ
+    expect(Array.from(out)).toEqual([4, 8]);
+    dataFromEps(Float32Array.of(1, 1), Float32Array.of(0.5, -0.5), 2, out);
+    expect(Array.from(out)).toEqual([0, 2]); // D = x − σ·ε
+    dataFromVelocity(Float32Array.of(1, 1), Float32Array.of(0.5, -0.5), 2, out);
+    expect(Array.from(out)).toEqual([2, 0]); // D = z + σ·v
+  });
+
+  it("solves a constant data estimate exactly in σ-space too", () => {
+    const sigmas = Float32Array.of(4, 2, 1, 0);
+    const st = makeIntegratorState(1);
+    let x = Float32Array.of(0);
+    const data = Float32Array.of(3.5);
+    for (let i = 0; i < 3; i++) {
+      const next = new Float32Array(1);
+      integrateDpmpp2m(st, x, data, sigmas[i], sigmas[i + 1], next);
+      x = next;
+    }
+    expect(x[0]).toBeCloseTo(3.5, 5);
+  });
+});
+
+
 import { describe, expect, it } from "vitest";
 import {
-  eulerStep, gaussian, guideVelocity, halfToFloat, integrateDpmpp2m, integrateEuler, integrateHeun, latentPreview,
-  makeIntegratorState, meanStd, mulberry32, pixelsToRgba, predictX0, promptSeed, rescaleGuidance, toFloat32,
-  type Solver,
+  betaSigmas, dataFromEps, dataFromVelocity, eulerStep, gaussian, guideVelocity, halfToFloat, integrateDpmpp2m,
+  integrateEuler, integrateHeun, latentPreview, makeIntegratorState, meanStd, mulberry32, pixelsToRgba, predictX0,
+  promptSeed, rescaleGuidance, sigmaSchedule, toFloat32, toSigmaSpace, type Solver,
 } from "../../src/lib/sampler";
 
 describe("rng", () => {
@@ -120,12 +178,14 @@ function solve(
   const v = new Float32Array(1);
   const scratch = new Float32Array(1);
   const next = new Float32Array(1);
+  const data = new Float32Array(1);
   const dt = tEnd / steps;
   for (let i = 0; i < steps; i++) {
     const t = i * dt;
     velocity(z, t, v);
     if (solver === "dpmpp2m") {
-      integrateDpmpp2m(st, z, v, t, t + dt, next);
+      dataFromVelocity(z, v, 1 - t, data);
+      integrateDpmpp2m(st, z, data, 1 - t, 1 - (t + dt), next);
     } else if (solver === "euler") {
       integrateEuler(z, v, dt, next);
     } else {
@@ -163,10 +223,14 @@ describe("solvers", () => {
   });
 
   it("dpmpp2m's first step is identical to euler's", () => {
+    // In flow terms: σ = 1 − t, and the first exponential update reduces to z + dt·v.
     const st = makeIntegratorState(1);
-    const a = new Float32Array(1), b = new Float32Array(1);
-    integrateDpmpp2m(st, Float32Array.of(0.3), Float32Array.of(-1.2), 0, 0.05, a);
-    integrateEuler(Float32Array.of(0.3), Float32Array.of(-1.2), 0.05, b);
+    const z = Float32Array.of(0.3);
+    const v = Float32Array.of(-1.2);
+    const a = new Float32Array(1), b = new Float32Array(1), data = new Float32Array(1);
+    dataFromVelocity(z, v, 1, data);
+    integrateDpmpp2m(st, z, data, 1, 0.95, a);
+    integrateEuler(z, v, 0.05, b);
     expect(a[0]).toBeCloseTo(b[0], 7);
   });
 

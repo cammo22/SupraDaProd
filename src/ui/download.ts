@@ -1,22 +1,32 @@
-// "Download once" sheet: shown the first time the model is needed.
+// "Download once" sheet: shown the first time a model is needed.
 import { $, toast } from "./dom";
 import type { Ctx } from "./context";
 import { type Key, t } from "../lib/i18n";
 import { formatBytes, formatDuration, isMobile } from "../lib/platform";
-import { type InstallProgress, type Manifest, type PartKey, installSupra, localStatus } from "../lib/models";
+import { type InstallProgress, type Manifest, installModel, localStatus, partsFor } from "../lib/models";
+import type { ModelSpec } from "../lib/registry";
 import { settings } from "../lib/settings";
 import { errMsg } from "../lib/errors";
 
-const PARTS: PartKey[] = ["dit", "t5", "vae", "tok"];
-
 /** Resolves with the manifest once the model is on disk (downloading if needed). */
-export async function ensureModel(ctx: Ctx): Promise<Manifest> {
-  const status = await localStatus(ctx.store);
+export async function ensureModel(ctx: Ctx, spec: ModelSpec): Promise<Manifest> {
+  const status = await localStatus(ctx.store, spec);
   if (status.installed && status.manifest) return status.manifest;
-  return new Promise<Manifest>((resolve, reject) => runSheet(ctx, resolve, reject));
+  return new Promise<Manifest>((resolve, reject) => runSheet(ctx, spec, resolve, reject, false));
 }
 
-function runSheet(ctx: Ctx, resolve: (m: Manifest) => void, reject: (e: Error) => void): void {
+/** Opens the sheet and starts downloading right away (model selector). */
+export function downloadModel(ctx: Ctx, spec: ModelSpec, _opts?: { autoModel?: boolean }): Promise<Manifest> {
+  return new Promise<Manifest>((resolve, reject) => runSheet(ctx, spec, resolve, reject, true));
+}
+
+function runSheet(
+  ctx: Ctx,
+  spec: ModelSpec,
+  resolve: (m: Manifest) => void,
+  reject: (e: Error) => void,
+  autoStart: boolean,
+): void {
   const dlg = $<HTMLDialogElement>("dlDialog");
   const partsEl = $("dlParts");
   const fill = $("dlFill");
@@ -26,10 +36,13 @@ function runSheet(ctx: Ctx, resolve: (m: Manifest) => void, reject: (e: Error) =
   const start = $<HTMLButtonElement>("dlStart");
   const cancel = $<HTMLButtonElement>("dlCancel");
   $("dlMobileHint").hidden = !isMobile;
+  $("dlTitle").textContent = t("dl_title", { name: spec.name });
+  $("dlSub").textContent = t("dl_sub", { name: spec.name, size: formatBytes(spec.bytes) });
 
+  const keys = partsFor(spec);
   partsEl.innerHTML = "";
-  const rows = new Map<PartKey, { root: HTMLElement; txt: HTMLElement; bar: HTMLElement }>();
-  for (const k of PARTS) {
+  const rows = new Map<string, { root: HTMLElement; txt: HTMLElement; bar: HTMLElement }>();
+  for (const k of keys) {
     const root = document.createElement("div");
     root.className = "part";
     root.innerHTML = `<span>${t(`part_${k}` as Key)}</span><b>0%</b><div class="bar"><i></i></div>`;
@@ -42,9 +55,9 @@ function runSheet(ctx: Ctx, resolve: (m: Manifest) => void, reject: (e: Error) =
   let running = false;
 
   const render = (p: InstallProgress) => {
-    for (const k of PARTS) {
+    for (const k of keys) {
       const r = rows.get(k)!;
-      const { done, total } = p.parts[k];
+      const { done, total } = p.parts[k] ?? { done: 0, total: null };
       const f = total ? Math.min(1, done / total) : 0;
       r.bar.style.width = `${(f * 100).toFixed(1)}%`;
       r.txt.textContent = total ? `${formatBytes(done)} / ${formatBytes(total)}` : formatBytes(done);
@@ -74,7 +87,11 @@ function runSheet(ctx: Ctx, resolve: (m: Manifest) => void, reject: (e: Error) =
     statusEl.classList.remove("err");
     setButtons("running");
     try {
-      const manifest = await installSupra(ctx.store, { endpoint: settings().endpoint, signal: ctl.signal, onProgress: render });
+      const manifest = await installModel(ctx.store, spec, {
+        endpoint: settings().endpoint,
+        signal: ctl.signal,
+        onProgress: render,
+      });
       finished = true;
       statusEl.textContent = t("dl_done");
       dlg.close();
@@ -116,4 +133,5 @@ function runSheet(ctx: Ctx, resolve: (m: Manifest) => void, reject: (e: Error) =
   info.textContent = "";
   statusEl.textContent = "";
   dlg.showModal();
+  if (autoStart) void go();
 }

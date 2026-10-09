@@ -16,7 +16,15 @@ export function startHub({ root, repo = "Bartholomheow/Supra2-IMG-ONNX", port = 
     requests: [],
     /** { "dit.onnx": bytes } → the first request for that file dies after `bytes` bytes. */
     cutOnce: {},
+    /** Serve the dynamic-batch DiT graph in place of dit.onnx (see make-mock-models.py). */
+    dynamicBatch: false,
     down: false,
+  };
+
+  /** Which file contents a request for `name` should return right now. */
+  const resolve = (name) => {
+    if (state.dynamicBatch && (name === "dit.onnx" || name === "dit-dyn.onnx")) return "dit-dyn.onnx";
+    return name;
   };
 
   const server = createServer((req, res) => {
@@ -33,18 +41,24 @@ export function startHub({ root, repo = "Bartholomheow/Supra2-IMG-ONNX", port = 
     if (state.down) return void req.socket.destroy();
 
     if (url.pathname === `/api/models/${repo}/tree/main`) {
-      const tree = [...files].map(([path, f]) => ({
-        type: "file",
-        path,
-        size: f.buf.length,
-        ...(path.endsWith(".onnx") ? { lfs: { oid: f.sha256, size: f.buf.length } } : {}),
-      }));
+      const tree = [...files]
+        .filter(([path]) => !(path === "dit-dyn.onnx" && !state.dynamicBatch))
+        .map(([path0, f]) => {
+          const path = resolve(path0);
+          const real = files.get(path) ?? f;
+          return {
+            type: "file",
+            path,
+            size: real.buf.length,
+            ...(path.endsWith(".onnx") ? { lfs: { oid: real.sha256, size: real.buf.length } } : {}),
+          };
+        });
       res.setHeader("content-type", "application/json");
       return void res.end(JSON.stringify(tree));
     }
     const prefix = `/${repo}/resolve/main/`;
     if (!url.pathname.startsWith(prefix)) return void res.writeHead(404).end("not found");
-    const name = decodeURIComponent(url.pathname.slice(prefix.length));
+    const name = resolve(decodeURIComponent(url.pathname.slice(prefix.length)));
     const f = files.get(name);
     if (!f) return void res.writeHead(404).end("not found");
 
