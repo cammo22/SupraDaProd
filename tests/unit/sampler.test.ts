@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  eulerStep, gaussian, halfToFloat, latentPreview, mulberry32, pixelsToRgba, predictX0, promptSeed, toFloat32,
+  eulerStep, gaussian, guideVelocity, halfToFloat, integrateDpmpp2m, integrateEuler, integrateHeun, latentPreview,
+  makeIntegratorState, meanStd, mulberry32, pixelsToRgba, predictX0, promptSeed, rescaleGuidance, toFloat32,
+  type Solver,
 } from "../../src/lib/sampler";
 
 describe("rng", () => {
@@ -74,7 +76,129 @@ describe("euler step with CFG", () => {
     }
     expect(z[0]).toBeCloseTo(2.5, 4);
   });
+
+  it("skips the unconditional branch when there is no guidance", () => {
+    const vc = Float32Array.of(5, -1);
+    const out = new Float32Array(2);
+    guideVelocity(vc, null, 3, out);
+    expect(Array.from(out)).toEqual([5, -1]);
+    guideVelocity(vc, null, 7, out); // cfg is irrelevant without a second branch
+    expect(Array.from(out)).toEqual([5, -1]);
+  });
+
+  it("rescale pulls the guided velocity towards the conditional scale", () => {
+    const vc = Float32Array.of(1, -1, 1, -1);
+    const v = Float32Array.of(4, -4, 4, -4);
+    const soft = Float32Array.from(v);
+    rescaleGuidance(vc, soft, 0.5);
+    expect(Math.abs(soft[0])).toBeGreaterThan(1);
+    expect(Math.abs(soft[0])).toBeLessThan(4);
+    expect(soft[0]).toBeCloseTo(-soft[1]);
+    rescaleGuidance(vc, v, 1);
+    expect(Math.abs(v[0])).toBeCloseTo(1, 5); // matches the conditional magnitude
+    expect(meanStd(Float32Array.of(2, 4)).sd).toBeCloseTo(1);
+    const untouched = Float32Array.of(2, 2);
+    rescaleGuidance(vc, untouched, 0);
+    expect(Array.from(untouched)).toEqual([2, 2]);
+  });
 });
+
+/* -------------------------------------------------------------------- *
+ *  Solvers — checked against ODEs with a known closed-form solution.     *
+ * -------------------------------------------------------------------- */
+
+/** Integrates dz/dt = velocity(z, t) from t = 0 to t = tEnd with `steps` steps. */
+function solve(
+  solver: Solver,
+  velocity: (z: Float32Array, t: number, out: Float32Array) => void,
+  z0: number,
+  steps: number,
+  tEnd = 1,
+): number {
+  let z = Float32Array.of(z0);
+  const st = makeIntegratorState(1);
+  const v = new Float32Array(1);
+  const scratch = new Float32Array(1);
+  const next = new Float32Array(1);
+  const dt = tEnd / steps;
+  for (let i = 0; i < steps; i++) {
+    const t = i * dt;
+    velocity(z, t, v);
+    if (solver === "dpmpp2m") {
+      integrateDpmpp2m(st, z, v, t, t + dt, next);
+    } else if (solver === "euler") {
+      integrateEuler(z, v, dt, next);
+    } else {
+      integrateEuler(z, v, dt, scratch);
+      if (i < steps - 1) {
+        velocity(scratch, t + dt, scratch);
+        integrateHeun(z, v, scratch, dt, next);
+      } else {
+        next.set(scratch); // no corrector on the last step: t = 1 is already the data
+      }
+    }
+    z = next.slice();
+  }
+  return z[0];
+}
+
+const constVel = (c: number) => (z: Float32Array, t: number, out: Float32Array) => { out[0] = c; void z; void t; };
+const constData = (target: number) => (z: Float32Array, t: number, out: Float32Array) => { out[0] = (target - z[0]) / (1 - t); };
+/** dz/dt = −z → z(1) = z0/e */
+const decay = (z: Float32Array, t: number, out: Float32Array) => { out[0] = -z[0]; void t; };
+
+describe("solvers", () => {
+  it("all three are exact for a constant velocity field", () => {
+    for (const s of ["euler", "dpmpp2m", "heun"] as Solver[]) {
+      expect(solve(s, constVel(2), 0.5, 25)).toBeCloseTo(2.5, 5);
+    }
+  });
+
+  it("dpmpp2m is exact when the model predicts the same data at every step", () => {
+    // v = (target − z)/σ ⇒ the data estimate D = z + σ·v equals `target` everywhere,
+    // which is exactly the case the exponential integrator solves in closed form.
+    for (const steps of [4, 8, 20]) {
+      expect(solve("dpmpp2m", constData(3.75), 0.5, steps)).toBeCloseTo(3.75, 5);
+    }
+  });
+
+  it("dpmpp2m's first step is identical to euler's", () => {
+    const st = makeIntegratorState(1);
+    const a = new Float32Array(1), b = new Float32Array(1);
+    integrateDpmpp2m(st, Float32Array.of(0.3), Float32Array.of(-1.2), 0, 0.05, a);
+    integrateEuler(Float32Array.of(0.3), Float32Array.of(-1.2), 0.05, b);
+    expect(a[0]).toBeCloseTo(b[0], 7);
+  });
+
+  it("is second order for dpmpp2m/heun and first order for euler", () => {
+    // Stop one step before σ = 0: the "take the data estimate" shortcut used on the
+    // final step would otherwise mask the order of the integrators themselves.
+    const tEnd = 1 - 1 / 64;
+    const err = (s: Solver, n: number) => Math.abs(solve(s, decay, 1, n, tEnd) - Math.exp(-tEnd));
+    const ratio = (s: Solver) => err(s, 16) / err(s, 32);
+    expect(ratio("euler")).toBeGreaterThan(1.8);
+    expect(ratio("euler")).toBeLessThan(2.2);
+    for (const s of ["dpmpp2m", "heun"] as Solver[]) {
+      expect(ratio(s)).toBeGreaterThan(3.5); // ≈ 2² for a 2nd-order method
+    }
+  });
+
+  it("beats euler on a real schedule: more accuracy for the same number of network evals", () => {
+    const exact = Math.exp(-1);
+    const euler32 = Math.abs(solve("euler", decay, 1, 32) - exact);
+    const dpm32 = Math.abs(solve("dpmpp2m", decay, 1, 32) - exact);
+    const dpm16 = Math.abs(solve("dpmpp2m", decay, 1, 16) - exact);
+    expect(dpm32).toBeLessThan(euler32 / 3);
+    expect(dpm16).toBeLessThan(euler32);
+  });
+
+  it("is deterministic and keeps no state between runs", () => {
+    const a = solve("dpmpp2m", decay, 1, 12);
+    solve("dpmpp2m", constVel(3), 1, 12); // a different job in between
+    expect(solve("dpmpp2m", decay, 1, 12)).toBe(a);
+  });
+});
+
 
 describe("numeric helpers", () => {
   it("halfToFloat decodes IEEE half precision", () => {
