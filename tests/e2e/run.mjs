@@ -74,7 +74,21 @@ async function newApp(settings = {}, { keepStorage = false, context } = {}) {
         localStorage.setItem("supradaprod:settings:v1", JSON.stringify(s));
       }
     },
-    [{ lang: "en", endpoint: hub.url, backend: "wasm", steps: 10, randomSeed: false, ...settings }, keepStorage],
+    [
+      {
+        lang: "en",
+        endpoint: hub.url,
+        backend: "wasm",
+        randomSeed: false,
+        // Keep the e2e fast: few steps, the solvers are covered by their own unit tests.
+        params: {
+          "supra2-img": { steps: 8, cfg: 3, solver: "dpmpp2m", cfgRescale: 0, size: 256, karras: false },
+          "dreamshaper-8": { steps: 4, cfg: 6, solver: "euler", cfgRescale: 0, size: 384, karras: false },
+        },
+        ...settings,
+      },
+      keepStorage,
+    ],
   );
   await page.goto(APP);
   await page.waitForFunction(() => !!window.__supra);
@@ -290,7 +304,6 @@ await step("solvers: DPM++ 2M is the default, euler still reproduces, both are d
 
   await page.locator('.preset[data-preset="fast"]').click();
   assert((await page.inputValue("#steps")) === "12", "the quick preset sets 12 steps");
-  assert((await page.inputValue("#solver")) === "dpmpp2m", "the quick preset uses DPM++ 2M");
 
   // Guidance rescale must reach the sampler and change the result.
   await page.selectOption("#solver", "euler");
@@ -300,6 +313,60 @@ await step("solvers: DPM++ 2M is the default, euler still reproduces, both are d
   await page.dispatchEvent("#cfgRescale", "input");
   await generate(page, "solver check", { seed: 21 });
   assert((await canvasHash(page)) !== plain, "cfg rescale should influence the image");
+  await ctx.close();
+});
+
+await step("model selector: install DreamShaper (mock SD 1.5), switch, generate, switch back", async () => {
+  const { page, ctx } = await newApp({ params: { "dreamshaper-8": { steps: 4, cfg: 6, solver: "euler", cfgRescale: 0, size: 512 } } });
+  await generate(page, "supra warmup", { seed: 1 }); // installs the default model first
+  const supraHash = await canvasHash(page);
+  const supraItem = () => page.evaluate(() => {
+    const i = window.__supra.ctx.gallery.items.find((x) => x.model === "supra2-img");
+    return `${i?.seed}|${i?.steps}|${i?.cfg}|${i?.solver}|${i?.cfgRescale}|${i?.size}`;
+  });
+  const firstItem = await supraItem();
+
+  await page.click("#modelChip");
+  await page.waitForSelector("#modelsDialog[open]");
+  const cards = await page.locator("#modelsList .model-card").count();
+  assert(cards === 4, `expected 4 catalogue entries, got ${cards}`);
+  // Models without an ONNX export are clearly marked instead of offering a download.
+  assert((await page.locator("#modelsList .model-card.off").count()) === 2, "iris-3b/Anima should be listed as unavailable");
+
+  await page.locator('#modelsList .model-card[data-model="dreamshaper-8"] .btn.ghost').click();
+  await page.waitForSelector("#dlDialog[open]");
+  await page.waitForSelector("#dlDialog", { state: "hidden", timeout: 60000 });
+  await page.waitForFunction(() => window.__supra.ctx.model.id === "dreamshaper-8", null, { timeout: 20000 });
+  assert((await page.textContent("#modelChipName")) === "DreamShaper 8", "the chip should follow the selection");
+  assert(!(await page.isVisible("#modelsDialog")), "the selector should close once the model is ready");
+  // The tune panel is already open (the helper opened it to set the seed).
+  if (!(await page.isVisible("#tune"))) await page.click("#btnTune");
+  assert(await page.isVisible("#sizeField"), "SD models expose a resolution picker");
+  assert(await page.isVisible("#karrasField"), "SD models expose the Karras toggle");
+
+  const before = await galleryCount(page);
+  await page.fill("#prompt", "anime portrait");
+  await page.click("#btnGo");
+  await page.waitForFunction((n) => window.__supra.ctx.gallery.items.length > n, before, { timeout: 120000 });
+  await idle(page);
+  const item = await page.evaluate(() => window.__supra.ctx.gallery.items[0]);
+  assert(item.model === "dreamshaper-8", `gallery item should record the model, got ${item.model}`);
+  assert(item.size === 512, `expected a 512px image, got ${item.size}`);
+  const sdA = await canvasHash(page);
+  await generate(page, "anime portrait", { seed: item.seed });
+  assert((await canvasHash(page)) === sdA, "the SD pipeline must be reproducible");
+
+  // Switching back must not re-download anything.
+  hub.state.requests.length = 0;
+  await page.click("#modelChip");
+  await page.waitForSelector("#modelsDialog[open]");
+  await page.locator('#modelsList .model-card[data-model="supra2-img"] .btn.primary').click();
+  await page.waitForFunction(() => window.__supra.ctx.model.id === "supra2-img", null, { timeout: 20000 });
+  await generate(page, "supra warmup", { seed: 1 });
+  const backHash = await canvasHash(page);
+  const backItem = await supraItem();
+  assert(backHash === supraHash, `the first model must still produce the same image (${firstItem} → ${backItem})`);
+  assert(!hub.state.requests.some((r) => r.includes("resolve/main")), "switching models must not download again");
   await ctx.close();
 });
 

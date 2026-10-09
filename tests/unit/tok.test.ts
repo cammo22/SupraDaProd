@@ -49,6 +49,7 @@ describe("clip tokenizer built from vocab.json + merges.txt", () => {
   it("keeps the CLIP geometry", () => {
     const json = buildClipTokenizerJson(vocab, merges);
     expect(json.model.merges).toEqual(["a b"]); // the #version header is dropped
+    expect(clipMerges("#version: 0.2\na b\n\nb c\n")).toEqual(["a b", "b c"]);
     expect(json.added_tokens.map((t) => t.id)).toEqual([0, 1]);
     expect(json.post_processor).toMatchObject({ type: "RobertaProcessing", cls: ["<|startoftext|>", 0], sep: ["<|endoftext|>", 1] });
     expect(json.model.unk_token).toBe("<|endoftext|>");

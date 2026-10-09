@@ -358,6 +358,7 @@ export function initCreate(ctx: Ctx) {
     engine?.dispose();
     engine = null;
   };
+  ctx.syncControls = syncControls;
 
   onChange((_s, key) => {
     if (key === "lang") el.goLabel.textContent = ctx.busy ? t("stop") : t("generate");

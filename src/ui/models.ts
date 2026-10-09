@@ -61,7 +61,7 @@ export function initModels(ctx: Ctx) {
     use.className = "btn primary";
     use.innerHTML = `<b>${spec.id === ctx.model.id ? t("m_in_use") : t("m_use")}</b>`;
     use.disabled = spec.id === ctx.model.id;
-    use.addEventListener("click", () => void ctx.useModel(spec.id));
+    use.addEventListener("click", () => void ctx.useModel(spec.id).then(() => dlg.close()));
 
     if (!installed) {
       const dl = document.createElement("button");
@@ -74,7 +74,8 @@ export function initModels(ctx: Ctx) {
         try {
           await downloadModel(ctx, spec, { autoModel: true });
           await ctx.useModel(spec.id);
-          render();
+          await render();
+          dlg.close();
         } catch (e) {
           console.warn(e);
         } finally {
