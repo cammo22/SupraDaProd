@@ -1,13 +1,12 @@
-// Model manager: knows which files make up the Supra2-IMG pipeline, installs
-// them once (resumable + verified) and answers "is everything here?" offline.
+// Model manager: knows which files make up each pipeline, installs them once
+// (resumable + verified) and answers "is this model here?" offline.
 import { downloadFile } from "./download";
 import { type Store, readJson, removeTree, usage, writeJson } from "./storage/types";
+import type { Family, ModelSpec } from "./registry";
 
-export const SUPRA_REPO = "Bartholomheow/Supra2-IMG-ONNX";
 export const DEFAULT_ENDPOINT = "https://huggingface.co";
-export const SUPRA_DIR = "models/supra2-img";
-export const WHISPER_DIR = "models/whisper";
 
+/** Supra2-IMG (flow) pipeline descriptor, as published by the ONNX repo. */
 export interface PipelineConfig {
   dit: string;
   text_encoder: string;
@@ -19,23 +18,48 @@ export interface PipelineConfig {
   image_size: number;
 }
 
-export type PartKey = "dit" | "t5" | "vae" | "tok";
+/** Stable-diffusion 1.x descriptor (beta schedule + geometry). */
+export interface SdConfig {
+  image_size: number;
+  latent_ch: number;
+  latent_size: number;
+  vae_scale: number;
+  ctx_len: number;
+  beta_start: number;
+  beta_end: number;
+  num_train_timesteps: number;
+  beta_schedule: string;
+}
+
+export type ModelConfig = PipelineConfig | SdConfig;
+
+export const isFlowConfig = (c: ModelConfig): c is PipelineConfig => "dit" in c;
+
+export interface ManifestFile {
+  path: string;
+  size: number;
+  sha256?: string;
+  /** Which progress row this file belongs to. */
+  key?: string;
+}
 
 export interface Manifest {
-  version: 1;
+  version: 2;
+  id: string;
   repo: string;
-  config: PipelineConfig;
-  files: Array<{ key: PartKey; path: string; size: number; sha256?: string }>;
+  family: Family;
+  config: ModelConfig;
+  files: ManifestFile[];
   installedAt: string;
 }
 
-export interface InstallProgress {
-  parts: Record<PartKey, { done: number; total: number | null }>;
-  done: number;
-  total: number | null;
-  /** bytes per second (smoothed) */
-  speed: number;
-  current: PartKey | null;
+/** 0.x/1.x manifests: only Supra2-IMG existed. */
+interface ManifestV1 {
+  version: 1;
+  repo: string;
+  config: PipelineConfig;
+  files: Array<{ key?: string; path: string; size: number; sha256?: string }>;
+  installedAt: string;
 }
 
 interface TreeItem {
@@ -43,6 +67,13 @@ interface TreeItem {
   path: string;
   size?: number;
   lfs?: { oid: string; size: number };
+}
+
+interface SchedulerConfig {
+  beta_start?: number;
+  beta_end?: number;
+  num_train_timesteps?: number;
+  beta_schedule?: string;
 }
 
 const joinUrl = (endpoint: string, ...p: string[]) => [endpoint.replace(/\/+$/, ""), ...p].join("/");
@@ -62,8 +93,49 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function readManifest(store: Store): Promise<Manifest | null> {
-  return readJson<Manifest>(store, `${SUPRA_DIR}/manifest.json`);
+/** Which progress row a repo path belongs to (also drives the i18n label). */
+export function partOf(spec: ModelSpec, path: string, cfg?: ModelConfig): string {
+  if (spec.family === "flow") {
+    const flow = cfg && isFlowConfig(cfg) ? cfg : null;
+    if (flow) {
+      if (path === flow.dit) return "dit";
+      if (path === flow.text_encoder) return "t5";
+      if (path === flow.vae_decoder) return "vae";
+    }
+    if (/tokenizer/.test(path)) return "tok";
+    if (path.includes("dit")) return "dit";
+    if (path.includes("t5") || path.includes("text_encoder")) return "t5";
+    return path.includes("vae") ? "vae" : "tok";
+  }
+  const top = path.split("/")[0];
+  if (top === "unet") return "unet";
+  if (top === "text_encoder") return "clip";
+  if (top === "vae_decoder") return "vae";
+  return "tok";
+}
+
+/** Ordered progress rows of a model. */
+export const partsFor = (spec: ModelSpec): string[] =>
+  spec.family === "flow" ? ["dit", "t5", "vae", "tok"] : ["unet", "clip", "vae", "tok"];
+
+/* ------------------------------------------------------------------ *
+ *  Installed state                                                    *
+ * ------------------------------------------------------------------ */
+
+export async function readManifest(store: Store, spec: ModelSpec): Promise<Manifest | null> {
+  const raw = await readJson<Manifest | ManifestV1>(store, `${spec.dir}/manifest.json`);
+  if (!raw) return null;
+  if (raw.version === 2) return { ...raw, id: raw.id ?? spec.id, family: raw.family ?? spec.family };
+  // 1.x install: upgraded on the fly, nothing has to be re-downloaded.
+  return {
+    version: 2,
+    id: spec.id,
+    repo: raw.repo ?? spec.repo,
+    family: "flow",
+    config: raw.config,
+    files: (raw.files ?? []).map((f) => ({ path: f.path, size: f.size, sha256: f.sha256, key: f.key })),
+    installedAt: raw.installedAt ?? new Date(0).toISOString(),
+  };
 }
 
 export interface LocalStatus {
@@ -73,46 +145,95 @@ export interface LocalStatus {
 }
 
 /** Offline check: every file from the manifest exists with the right size. */
-export async function localStatus(store: Store): Promise<LocalStatus> {
-  const manifest = await readManifest(store);
+export async function localStatus(store: Store, spec: ModelSpec): Promise<LocalStatus> {
+  const manifest = await readManifest(store, spec);
   if (!manifest) return { installed: false, bytes: 0, manifest: null };
   let bytes = 0;
   for (const f of manifest.files) {
-    const st = await store.stat(`${SUPRA_DIR}/${f.path}`);
+    const st = await store.stat(`${spec.dir}/${f.path}`);
     if (!st || st.size !== f.size) return { installed: false, bytes, manifest };
     bytes += st.size;
   }
   return { installed: true, bytes, manifest };
 }
 
-export async function installSupra(
-  store: Store,
-  opts: {
-    endpoint?: string;
-    signal?: AbortSignal;
-    onProgress?: (p: InstallProgress) => void;
-  } = {},
-): Promise<Manifest> {
+export const modelUsage = async (store: Store, spec: ModelSpec): Promise<number> =>
+  usage(store, spec.dir).catch(() => 0);
+
+export async function removeModel(store: Store, spec: ModelSpec): Promise<void> {
+  await removeTree(store, spec.dir).catch(() => {});
+}
+
+/* ------------------------------------------------------------------ *
+ *  Installation                                                       *
+ * ------------------------------------------------------------------ */
+
+export interface InstallProgress {
+  /** Per progress row: bytes on disk and expected total (null while unknown). */
+  parts: Record<string, { done: number; total: number | null }>;
+  done: number;
+  total: number | null;
+  /** bytes per second (smoothed) */
+  speed: number;
+  current: string | null;
+}
+
+export interface InstallOptions {
+  endpoint?: string;
+  signal?: AbortSignal;
+  onProgress?: (p: InstallProgress) => void;
+}
+
+/** Reads the descriptor the pipeline needs (and caches it for offline restarts). */
+async function readConfig(store: Store, spec: ModelSpec, endpoint: string, signal?: AbortSignal): Promise<ModelConfig> {
+  const cached = await readJson<ModelConfig>(store, `${spec.dir}/config.json`);
+  if (spec.family === "flow") {
+    try {
+      const cfg = await fetchJson<PipelineConfig>(fileUrl(endpoint, spec.repo, "pipeline_config.json"), signal);
+      safeRel(cfg.dit);
+      safeRel(cfg.text_encoder);
+      safeRel(cfg.vae_decoder);
+      return cfg;
+    } catch (e) {
+      if (cached) return cached;
+      throw e;
+    }
+  }
+  // sd15: the beta schedule comes from the repo, the geometry from the spec.
+  const extra = spec.extra ?? {};
+  let sched: SchedulerConfig = {};
+  try {
+    sched = await fetchJson<SchedulerConfig>(fileUrl(endpoint, spec.repo, "scheduler/scheduler_config.json"), signal);
+  } catch {
+    /* SD 1.x defaults below */
+  }
+  const downsample = extra.downsample ?? 8;
+  return {
+    image_size: spec.resolution,
+    latent_ch: 4,
+    latent_size: Math.round(spec.resolution / downsample),
+    vae_scale: extra.vae_scale ?? 0.18215,
+    ctx_len: extra.ctx_len ?? 77,
+    beta_start: sched.beta_start ?? 0.00085,
+    beta_end: sched.beta_end ?? 0.012,
+    num_train_timesteps: sched.num_train_timesteps ?? 1000,
+    beta_schedule: sched.beta_schedule ?? "scaled_linear",
+  } satisfies SdConfig;
+}
+
+export async function installModel(store: Store, spec: ModelSpec, opts: InstallOptions = {}): Promise<Manifest> {
   const endpoint = opts.endpoint || DEFAULT_ENDPOINT;
   const { signal, onProgress } = opts;
 
   // 1. Config (falls back to a previous copy if the Hub is unreachable).
-  let cfg: PipelineConfig;
-  const cfgPath = `${SUPRA_DIR}/pipeline_config.json`;
-  try {
-    cfg = await fetchJson<PipelineConfig>(fileUrl(endpoint, SUPRA_REPO, "pipeline_config.json"), signal);
-    await writeJson(store, cfgPath, cfg);
-  } catch (e) {
-    const local = await readJson<PipelineConfig>(store, cfgPath);
-    if (!local || signal?.aborted) throw e;
-    cfg = local;
-  }
+  const config = await readConfig(store, spec, endpoint, signal);
+  await writeJson(store, `${spec.dir}/config.json`, config).catch(() => {});
 
-  // 2. Sizes + checksums from the tree API (best effort — only used to verify).
+  // 2. The repo file list (sizes + sha256 of the LFS objects, when available).
   const meta = new Map<string, { size?: number; sha256?: string }>();
   try {
     const tree = await fetchJson<TreeItem[]>(
-      joinUrl(endpoint, "api", "models", SUPRA_REPO, "tree", "main?recursive=true"),
+      joinUrl(endpoint, "api", "models", spec.repo, "tree", "main?recursive=true"),
       signal,
     );
     for (const it of tree) {
@@ -122,45 +243,59 @@ export async function installSupra(
     /* no verification metadata: fall back to Content-Length */
   }
 
-  const plan: Array<{ key: PartKey; path: string }> = [
-    { key: "tok", path: "tokenizer.json" },
-    { key: "tok", path: "tokenizer_config.json" },
-    { key: "vae", path: safeRel(cfg.vae_decoder) },
-    { key: "t5", path: safeRel(cfg.text_encoder) },
-    { key: "dit", path: safeRel(cfg.dit) },
-  ];
+  // 3. Expand the plan against what the repo actually contains.
+  const wanted: string[] = [];
+  const add = (path: string) => {
+    if (!meta.has(path)) return; // not in this export → skip quietly
+    if (!wanted.includes(path)) wanted.push(safeRel(path));
+  };
+  for (const entry of spec.plan) {
+    if (entry.endsWith("/")) {
+      for (const path of meta.keys()) if (path.startsWith(entry)) add(path);
+    } else add(entry);
+  }
+  if (isFlowConfig(config)) {
+    // The Supra2-IMG ONNX file names live in pipeline_config.json.
+    add(config.dit);
+    add(config.text_encoder);
+    add(config.vae_decoder);
+  }
+  if (!wanted.length) throw new Error(`nothing to download for ${spec.id} — is the repo reachable?`);
+  // Small files first, then the big networks: the progress feels smoother.
+  wanted.sort((a, b) => (meta.get(a)?.size ?? 0) - (meta.get(b)?.size ?? 0));
 
   const prog: InstallProgress = {
-    parts: { dit: { done: 0, total: null }, t5: { done: 0, total: null }, vae: { done: 0, total: null }, tok: { done: 0, total: null } },
+    parts: Object.fromEntries(partsFor(spec).map((p) => [p, { done: 0, total: null }])),
     done: 0,
     total: null,
     speed: 0,
     current: null,
   };
-  for (const p of plan) {
-    const m = meta.get(p.path);
-    const t = prog.parts[p.key];
-    t.total = m?.size != null ? (t.total ?? 0) + m.size : t.total;
-  }
-  const knownTotal = plan.every((p) => meta.get(p.path)?.size != null)
-    ? plan.reduce((a, p) => a + meta.get(p.path)!.size!, 0)
-    : null;
-
   const perFile = new Map<string, number>();
+  let knownTotal = 0;
+  let allKnown = true;
+  for (const path of wanted) {
+    const size = meta.get(path)?.size ?? null;
+    if (size == null) allKnown = false;
+    else knownTotal += size;
+    const row = prog.parts[partOf(spec, path, config)];
+    if (row && size != null) row.total = (row.total ?? 0) + size;
+  }
+  prog.total = allKnown ? knownTotal : null;
+
   let lastT = performance.now();
   let lastBytes = 0;
-  const emit = (key: PartKey) => {
+  const emit = (key: string) => {
     prog.current = key;
-    const partDone: Record<PartKey, number> = { dit: 0, t5: 0, vae: 0, tok: 0 };
+    for (const k of Object.keys(prog.parts)) prog.parts[k].done = 0;
     let done = 0;
-    for (const p of plan) {
-      const d = perFile.get(p.path) ?? 0;
-      partDone[p.key] += d;
+    for (const path of wanted) {
+      const d = perFile.get(path) ?? 0;
       done += d;
+      const row = prog.parts[partOf(spec, path, config)];
+      if (row) row.done += d;
     }
-    for (const k of Object.keys(partDone) as PartKey[]) prog.parts[k].done = partDone[k];
     prog.done = done;
-    prog.total = knownTotal;
     const now = performance.now();
     if (now - lastT >= 500) {
       const inst = ((done - lastBytes) / (now - lastT)) * 1000;
@@ -171,42 +306,39 @@ export async function installSupra(
     onProgress?.(prog);
   };
 
-  // 3. Download everything next to each other, one file at a time.
-  const files: Manifest["files"] = [];
-  for (const p of plan) {
-    const m = meta.get(p.path);
-    const dest = `${SUPRA_DIR}/${p.path}`;
+  // 4. Download everything next to each other, one file at a time.
+  const files: ManifestFile[] = [];
+  for (const path of wanted) {
+    const m = meta.get(path);
+    const dest = `${spec.dir}/${path}`;
+    const key = partOf(spec, path, config);
     await downloadFile(
       store,
       dest,
-      { url: fileUrl(endpoint, SUPRA_REPO, p.path), size: m?.size, sha256: m?.sha256 },
+      { url: fileUrl(endpoint, spec.repo, path), size: m?.size, sha256: m?.sha256 },
       {
         signal,
         onProgress: (done, total) => {
-          perFile.set(p.path, done);
-          if (total != null && prog.parts[p.key].total == null) prog.parts[p.key].total = total;
-          emit(p.key);
+          perFile.set(path, done);
+          const row = prog.parts[key];
+          if (row && total != null && row.total == null) row.total = total;
+          emit(key);
         },
       },
     );
     const st = await store.stat(dest);
-    files.push({ key: p.key, path: p.path, size: st?.size ?? 0, sha256: m?.sha256 });
+    files.push({ path, size: st?.size ?? 0, sha256: m?.sha256, key });
   }
 
-  const manifest: Manifest = { version: 1, repo: SUPRA_REPO, config: cfg, files, installedAt: new Date().toISOString() };
-  await writeJson(store, `${SUPRA_DIR}/manifest.json`, manifest);
+  const manifest: Manifest = {
+    version: 2,
+    id: spec.id,
+    repo: spec.repo,
+    family: spec.family,
+    config,
+    files,
+    installedAt: new Date().toISOString(),
+  };
+  await writeJson(store, `${spec.dir}/manifest.json`, manifest);
   return manifest;
 }
-
-export async function removeSupra(store: Store): Promise<void> {
-  await removeTree(store, SUPRA_DIR).catch(() => {});
-}
-
-export async function removeWhisper(store: Store): Promise<void> {
-  await removeTree(store, WHISPER_DIR).catch(() => {});
-}
-
-export const modelsUsage = async (store: Store) => ({
-  supra: await usage(store, SUPRA_DIR).catch(() => 0),
-  whisper: await usage(store, WHISPER_DIR).catch(() => 0),
-});

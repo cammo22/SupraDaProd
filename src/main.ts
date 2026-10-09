@@ -1,12 +1,16 @@
 import "./styles/main.css";
-import { $ } from "./ui/dom";
+import { $, toast } from "./ui/dom";
 import type { Ctx } from "./ui/context";
 import { initCreate } from "./ui/create";
 import { initGallery } from "./ui/gallery";
 import { initSettings } from "./ui/settings";
-import { initVoice } from "./ui/voice";
+import { initModels } from "./ui/models";
+import { ensureModel } from "./ui/download";
 import { Gallery } from "./lib/gallery";
-import { applyI18n } from "./lib/i18n";
+import { applyI18n, t } from "./lib/i18n";
+import { localStatus } from "./lib/models";
+import { modelById } from "./lib/registry";
+import { settings, update } from "./lib/settings";
 import { getStore } from "./lib/storage";
 import { isTauri } from "./lib/platform";
 
@@ -15,7 +19,7 @@ declare global {
   const __APP_VERSION__: string;
 }
 
-function switchView(name: "create" | "voice" | "gallery") {
+function switchView(name: "create" | "gallery") {
   document.querySelectorAll<HTMLElement>(".tab").forEach((b) => {
     const on = b.dataset.view === name;
     b.classList.toggle("on", on);
@@ -33,21 +37,52 @@ async function boot() {
     store,
     gallery,
     busy: false,
+    model: modelById(settings().modelId),
+    manifest: null,
+    installed: false,
     switchView,
     generate: async () => {},
     loadParams: () => {},
     resetEngines: () => {},
+    refreshModel: async () => {
+      const status = await localStatus(store, ctx.model);
+      ctx.manifest = status.manifest;
+      ctx.installed = status.installed;
+    },
+    useModel: async (id: string) => {
+      const spec = modelById(id);
+      if (spec.unavailable) return void toast(t(spec.unavailable === "no-onnx" ? "m_no_onnx" : "m_too_big"));
+      if (ctx.busy) return;
+      try {
+        if (!ctx.installed || ctx.model.id !== spec.id) {
+          const status = await localStatus(store, spec);
+          if (!status.installed) await ensureModel({ ...ctx, model: spec }, spec);
+        }
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") console.warn(e);
+        return;
+      }
+      ctx.resetEngines();
+      update("modelId", spec.id);
+      ctx.model = spec;
+      await ctx.refreshModel();
+      ctx.syncControls?.();
+      await ctx.refreshModels?.();
+      toast(t("m_selected", { name: spec.name }));
+    },
   };
 
   applyI18n();
   document.querySelectorAll<HTMLElement>(".tab").forEach((tab) =>
-    tab.addEventListener("click", () => switchView(tab.dataset.view as "create" | "voice" | "gallery")),
+    tab.addEventListener("click", () => switchView(tab.dataset.view as "create" | "gallery")),
   );
   initCreate(ctx);
-  initVoice(ctx);
+  initModels(ctx);
   initGallery(ctx);
   initSettings(ctx);
   applyI18n();
+  await ctx.refreshModel();
+  ctx.syncControls?.();
 
   // Ask the browser not to evict our data (no-op inside Tauri).
   void navigator.storage?.persist?.().catch(() => {});
@@ -55,6 +90,7 @@ async function boot() {
   // Test hook (only reads state): lets the e2e suite inspect the app.
   (window as unknown as { __supra?: unknown }).__supra = { ctx, $ };
 }
+
 
 /** Browser/PWA build: register the service worker (cross-origin isolation + offline shell). */
 function registerServiceWorker() {

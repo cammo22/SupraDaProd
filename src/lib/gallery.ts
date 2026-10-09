@@ -1,6 +1,7 @@
 // Gallery persistence on top of the Store: `gallery/index.json` + one PNG per image.
 // The index format is backward compatible with SupraDaProd 0.x (entries keyed by `file`).
 import { type Store, readJson, writeJson } from "./storage/types";
+import { isSolver, type Solver } from "./sampler";
 
 export interface GalleryItem {
   /** Same as `file`; kept for clarity in the UI layer. */
@@ -11,6 +12,13 @@ export interface GalleryItem {
   seed: number;
   steps: number;
   cfg: number;
+  /** Integrator + guidance rescale used (2.x; absent in older items). */
+  solver?: Solver;
+  cfgRescale?: number;
+  /** Which model painted it (2.x; older items are all Supra2-IMG). */
+  model?: string;
+  /** Output resolution in pixels (2.x). */
+  size?: number;
   date: string;
   fav?: boolean;
   /** Only in memory: the image could not be written to disk. */
@@ -44,6 +52,10 @@ export class Gallery {
         seed: r.seed ?? 0,
         steps: r.steps ?? 0,
         cfg: r.cfg ?? 0,
+        solver: isSolver(r.solver) ? r.solver : undefined,
+        cfgRescale: typeof r.cfgRescale === "number" ? r.cfgRescale : undefined,
+        model: typeof r.model === "string" ? r.model : undefined,
+        size: typeof r.size === "number" ? r.size : undefined,
         date: r.date ?? new Date(0).toISOString(),
         fav: !!r.fav,
       }));

@@ -1,6 +1,6 @@
 [package]
 name = "supradaprod"
-version = "1.0.2"
+version = "2.0.0"
 description = "Text-to-image studio on your device — type it or say it. Powered by Supra2-IMG."
 authors = ["cammo22"]
 edition = "2021"

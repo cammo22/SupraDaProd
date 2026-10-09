@@ -8,8 +8,9 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 
 // onnxruntime-web ships its WebAssembly next to the JS. To keep the app 100%
 // offline (no CDN at runtime) we copy exactly the files we need into /public.
-//   /ort/     → onnxruntime-web 1.30 (WebGPU + CPU, "jsep" build) — used by Supra2-IMG
-//   /ort-tf/  → the CPU-only build that Transformers.js (Whisper) was built against
+//   /ort/ → onnxruntime-web 1.30 (WebGPU + CPU, "jsep" build) — used by Supra2-IMG
+// Transformers.js is only used for *tokenizing* the prompt, so its own copy of the
+// WASM runtime is never instantiated and is not shipped.
 const mainDist = dirname(require.resolve("ort"));
 const tfRequire = createRequire(require.resolve("@huggingface/transformers"));
 const tfOrtDist = dirname(tfRequire.resolve("onnxruntime-web"));
@@ -17,8 +18,6 @@ const tfOrtDist = dirname(tfRequire.resolve("onnxruntime-web"));
 const ORT_FILES: Array<[string, string, string]> = [
   [mainDist, "ort-wasm-simd-threaded.jsep.mjs", "ort"],
   [mainDist, "ort-wasm-simd-threaded.jsep.wasm", "ort"],
-  [tfOrtDist, "ort-wasm-simd-threaded.mjs", "ort-tf"],
-  [tfOrtDist, "ort-wasm-simd-threaded.wasm", "ort-tf"],
 ];
 
 function ortAssets(): Plugin {
@@ -59,7 +58,8 @@ export default defineConfig({
   resolve: {
     conditions: [...defaultClientConditions, "onnxruntime-web-use-extern-wasm"],
     alias: [
-      // Transformers.js (Whisper only) gets the small CPU-only runtime.
+      // Transformers.js is here for the T5 tokenizer only, so point its ONNX runtime at
+      // the small CPU-only build instead of the full WebGPU bundle.
       { find: /^onnxruntime-web$/, replacement: join(tfOrtDist, "ort.wasm.min.mjs") },
     ],
   },

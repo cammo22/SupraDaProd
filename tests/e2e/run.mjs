@@ -32,7 +32,7 @@ const assert = (c, m) => {
   if (!c) throw new Error(m || "assertion failed");
 };
 
-if (!existsSync(resolve(MOCK, "Bartholomheow/Supra2-IMG-ONNX/dit.onnx"))) {
+if (!existsSync(resolve(MOCK, "Bartholomheow/Supra2-IMG-ONNX/dit-dyn.onnx"))) {
   const r = spawnSync("python3", [resolve(ROOT, "tests/e2e/make-mock-models.py"), resolve(MOCK, "Bartholomheow/Supra2-IMG-ONNX")], { stdio: "inherit" });
   if (r.status !== 0) process.exit(1);
 }
@@ -56,8 +56,6 @@ const browser = await chromium.launch({
   headless: true,
   args: [
     "--no-sandbox",
-    "--use-fake-device-for-media-stream",
-    "--use-fake-ui-for-media-stream",
     "--enable-unsafe-webgpu",
     "--enable-features=Vulkan",
     "--use-angle=swiftshader",
@@ -66,7 +64,7 @@ const browser = await chromium.launch({
 
 const logs = [];
 async function newApp(settings = {}, { keepStorage = false, context } = {}) {
-  const ctx = context ?? (await browser.newContext({ viewport: { width: 1200, height: 900 }, permissions: ["microphone"] }));
+  const ctx = context ?? (await browser.newContext({ viewport: { width: 1200, height: 900 } }));
   const page = await ctx.newPage();
   page.on("console", (m) => { if (["error", "warning"].includes(m.type())) logs.push(`[${m.type()}] ${m.text()}`); });
   page.on("pageerror", (e) => logs.push(`[pageerror] ${e.message}`));
@@ -76,7 +74,21 @@ async function newApp(settings = {}, { keepStorage = false, context } = {}) {
         localStorage.setItem("supradaprod:settings:v1", JSON.stringify(s));
       }
     },
-    [{ lang: "en", endpoint: hub.url, backend: "wasm", steps: 10, randomSeed: false, ...settings }, keepStorage],
+    [
+      {
+        lang: "en",
+        endpoint: hub.url,
+        backend: "wasm",
+        randomSeed: false,
+        // Keep the e2e fast: few steps, the solvers are covered by their own unit tests.
+        params: {
+          "supra2-img": { steps: 8, cfg: 3, solver: "dpmpp2m", cfgRescale: 0, size: 256, karras: false },
+          "dreamshaper-8": { steps: 4, cfg: 6, solver: "euler", cfgRescale: 0, size: 384, karras: false },
+        },
+        ...settings,
+      },
+      keepStorage,
+    ],
   );
   await page.goto(APP);
   await page.waitForFunction(() => !!window.__supra);
@@ -270,22 +282,127 @@ await step("language switch + settings dialog + storage numbers", async () => {
   await ctx.close();
 });
 
-await step("voice: hold-to-talk records and handles an unavailable Whisper model gracefully", async () => {
-  const { page, ctx } = await newApp();
-  await page.click('.tab[data-view="voice"]');
-  const box = await page.locator("#holdBtn").boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.waitForSelector("#holdBtn.recording");
-  await page.waitForTimeout(1500);
-  const lvlSet = await page.evaluate(() => document.getElementById("holdBtn").style.getPropertyValue("--lvl") !== "");
-  await page.mouse.up();
-  assert(lvlSet, "level meter should update while recording");
-  await page.waitForFunction(() => !document.getElementById("holdBtn").classList.contains("recording"));
-  // Whisper can't be downloaded from the mock hub → the app must recover and stay usable.
-  await page.waitForFunction(() => !window.__supra.ctx.busy, null, { timeout: 60000 });
-  assert((await page.textContent("#recStatus")).length > 0);
+await step("solvers: DPM++ 2M is the default, euler still reproduces, both are deterministic", async () => {
+  const { page, ctx } = await newApp({ steps: 8 });
+  await page.click("#btnTune");
+  assert((await page.inputValue("#solver")) === "dpmpp2m", "DPM++ 2M should be the default solver");
+  assert(/model passes/.test(await page.textContent("#costHint")), "cost hint expected");
+
+  await generate(page, "solver check", { seed: 21 });
+  const dpmA = await canvasHash(page);
+  await generate(page, "solver check", { seed: 21 });
+  assert((await canvasHash(page)) === dpmA, "the default solver must be reproducible");
+
+  await page.selectOption("#solver", "euler");
+  await generate(page, "solver check", { seed: 21 });
+  const eulerA = await canvasHash(page);
+  assert(eulerA !== dpmA, "euler and DPM++ 2M should not give the same pixels");
+
+  await page.selectOption("#solver", "heun");
+  await generate(page, "solver check", { seed: 21 });
+  assert((await canvasHash(page)) !== eulerA, "heun should differ from euler too");
+
+  await page.locator('.preset[data-preset="fast"]').click();
+  assert((await page.inputValue("#steps")) === "12", "the quick preset sets 12 steps");
+
+  // Guidance rescale must reach the sampler and change the result.
+  await page.selectOption("#solver", "euler");
+  await generate(page, "solver check", { seed: 21 });
+  const plain = await canvasHash(page);
+  await page.fill("#cfgRescale", "10");
+  await page.dispatchEvent("#cfgRescale", "input");
+  await generate(page, "solver check", { seed: 21 });
+  assert((await canvasHash(page)) !== plain, "cfg rescale should influence the image");
   await ctx.close();
+});
+
+await step("model selector: install DreamShaper (mock SD 1.5), switch, generate, switch back", async () => {
+  const { page, ctx } = await newApp({ params: { "dreamshaper-8": { steps: 4, cfg: 6, solver: "euler", cfgRescale: 0, size: 512 } } });
+  await generate(page, "supra warmup", { seed: 1 }); // installs the default model first
+  const supraHash = await canvasHash(page);
+  const supraItem = () => page.evaluate(() => {
+    const i = window.__supra.ctx.gallery.items.find((x) => x.model === "supra2-img");
+    return `${i?.seed}|${i?.steps}|${i?.cfg}|${i?.solver}|${i?.cfgRescale}|${i?.size}`;
+  });
+  const firstItem = await supraItem();
+
+  await page.click("#modelChip");
+  await page.waitForSelector("#modelsDialog[open]");
+  const cards = await page.locator("#modelsList .model-card").count();
+  assert(cards === 4, `expected 4 catalogue entries, got ${cards}`);
+  // Models without an ONNX export are clearly marked instead of offering a download.
+  assert((await page.locator("#modelsList .model-card.off").count()) === 2, "iris-3b/Anima should be listed as unavailable");
+
+  await page.locator('#modelsList .model-card[data-model="dreamshaper-8"] .btn.ghost').click();
+  await page.waitForSelector("#dlDialog[open]");
+  await page.waitForSelector("#dlDialog", { state: "hidden", timeout: 60000 });
+  await page.waitForFunction(() => window.__supra.ctx.model.id === "dreamshaper-8", null, { timeout: 20000 });
+  assert((await page.textContent("#modelChipName")) === "DreamShaper 8", "the chip should follow the selection");
+  assert(!(await page.isVisible("#modelsDialog")), "the selector should close once the model is ready");
+  // The tune panel is already open (the helper opened it to set the seed).
+  if (!(await page.isVisible("#tune"))) await page.click("#btnTune");
+  assert(await page.isVisible("#sizeField"), "SD models expose a resolution picker");
+  assert(await page.isVisible("#karrasField"), "SD models expose the Karras toggle");
+
+  const before = await galleryCount(page);
+  await page.fill("#prompt", "anime portrait");
+  await page.click("#btnGo");
+  await page.waitForFunction((n) => window.__supra.ctx.gallery.items.length > n, before, { timeout: 120000 });
+  await idle(page);
+  const item = await page.evaluate(() => window.__supra.ctx.gallery.items[0]);
+  assert(item.model === "dreamshaper-8", `gallery item should record the model, got ${item.model}`);
+  assert(item.size === 512, `expected a 512px image, got ${item.size}`);
+  const sdA = await canvasHash(page);
+  await generate(page, "anime portrait", { seed: item.seed });
+  assert((await canvasHash(page)) === sdA, "the SD pipeline must be reproducible");
+
+  // The other solvers must work with the epsilon schedule too.
+  for (const solver of ["dpmpp2m", "heun"]) {
+    await page.selectOption("#solver", solver);
+    const beforeSolver = await galleryCount(page);
+    await page.fill("#prompt", "anime portrait");
+    await page.click("#btnGo");
+    await page.waitForFunction((n) => window.__supra.ctx.gallery.items.length > n, beforeSolver, { timeout: 120000 });
+    await idle(page);
+    const solverItem = await page.evaluate(() => window.__supra.ctx.gallery.items[0]);
+    assert(solverItem.solver === solver && solverItem.model === "dreamshaper-8", `solver ${solver} did not reach the sampler`);
+    assert(await page.evaluate(() => !window.__supra.ctx.gallery.items[0].volatile), "image should be stored");
+  }
+  const heunHash = await canvasHash(page);
+  assert(heunHash !== sdA, "heun should differ from euler on the SD pipeline");
+  await page.selectOption("#solver", "euler");
+
+  // Switching back must not re-download anything.
+  hub.state.requests.length = 0;
+  await page.click("#modelChip");
+  await page.waitForSelector("#modelsDialog[open]");
+  await page.locator('#modelsList .model-card[data-model="supra2-img"] .btn.primary').click();
+  await page.waitForFunction(() => window.__supra.ctx.model.id === "supra2-img", null, { timeout: 20000 });
+  await generate(page, "supra warmup", { seed: 1 });
+  const backHash = await canvasHash(page);
+  const backItem = await supraItem();
+  assert(backHash === supraHash, `the first model must still produce the same image (${firstItem} → ${backItem})`);
+  assert(!hub.state.requests.some((r) => r.includes("resolve/main")), "switching models must not download again");
+  await ctx.close();
+});
+
+await step("batched guidance: both branches in one DiT call give the exact same image", async () => {
+  const fixed = await newApp({ steps: 6 });
+  await generate(fixed.page, "batch check", { seed: 33 });
+  const a = await canvasHash(fixed.page);
+  await fixed.ctx.close();
+
+  // Same weights, but a graph that accepts a batch of 2 → the worker keeps one call per step.
+  hub.state.dynamicBatch = true;
+  try {
+    const dyn = await newApp({ steps: 6 });
+    await generate(dyn.page, "batch check", { seed: 33 });
+    const b = await canvasHash(dyn.page);
+    assert(a === b, "batched guidance must produce the same pixels as two calls");
+    await dyn.ctx.close();
+  } finally {
+    hub.state.dynamicBatch = false;
+  }
 });
 
 await step("webgpu backend (when the browser offers it) matches the wasm result closely", async () => {
@@ -308,7 +425,7 @@ await hub.close();
 if (logs.length) {
   const csp = logs.filter((l) => /Content Security Policy|Refused to/i.test(l));
   if (csp.length) { failures.push("CSP violations"); console.log("\n  ✗ CSP violations:\n    " + [...new Set(csp)].join("\n    ")); }
-  const interesting = logs.filter((l) => !/favicon|Failed to load resource|net::ERR|whisper|Xenova|huggingface/i.test(l));
+  const interesting = logs.filter((l) => !/favicon|Failed to load resource|net::ERR|huggingface/i.test(l));
   if (interesting.length) console.log("\nbrowser console noise:\n  " + [...new Set(interesting)].slice(0, 15).join("\n  "));
 }
 console.log(`\n${passed} passed, ${failures.length} failed${failures.length ? `: ${failures.join("; ")}` : ""}\n`);

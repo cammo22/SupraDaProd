@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { Rpc, Transfer } from "../../src/workers/rpc";
-import { resample, rms } from "../../src/voice/recorder";
-import { cachePath } from "../../src/voice/whisper";
 import { MemoryStore } from "../../src/lib/storage/memory";
 import { readAll, readJson, removeTree, usage, validatePath, writeJson } from "../../src/lib/storage/types";
 import { PROMPTS, randomPrompt } from "../../src/lib/prompts";
 import { formatBytes, formatDuration } from "../../src/lib/platform";
-import { fileUrl, installSupra, localStatus, removeSupra, SUPRA_DIR } from "../../src/lib/models";
+import { fileUrl, installModel, localStatus, removeModel } from "../../src/lib/models";
+import { modelById, DEFAULT_MODEL_ID } from "../../src/lib/registry";
 import { Gallery } from "../../src/lib/gallery";
 import { suggestName } from "../../src/lib/export";
 import { t } from "../../src/lib/i18n";
@@ -54,29 +53,6 @@ describe("rpc", () => {
     r.failAll(new Error("gone"));
     await expect(p).rejects.toThrow("gone");
     a.close(); b.close();
-  });
-});
-
-describe("audio helpers", () => {
-  it("resamples 48k → 16k keeping duration and shape", () => {
-    const n = 48000;
-    const sine = Float32Array.from({ length: n }, (_, i) => Math.sin((2 * Math.PI * 440 * i) / 48000));
-    const out = resample(sine, 48000, 16000);
-    expect(out.length).toBe(16000);
-    expect(out[0]).toBeCloseTo(0, 3);
-    expect(Math.max(...out)).toBeGreaterThan(0.9);
-    expect(rms(out)).toBeCloseTo(Math.SQRT1_2, 1);
-  });
-  it("is a no-op at the same rate and safe on empty input", () => {
-    const x = Float32Array.of(1, 2, 3);
-    expect(resample(x, 16000, 16000)).toBe(x);
-    expect(resample(new Float32Array(0), 44100, 16000)).toHaveLength(0);
-  });
-  it("whisper cache keys are flat and fs-safe", () => {
-    const p = cachePath("https://huggingface.co/Xenova/whisper-tiny/resolve/main/onnx/encoder_model_quantized.onnx");
-    expect(p.startsWith("models/whisper/")).toBe(true);
-    expect(p.slice("models/whisper/".length)).not.toMatch(/[/\\:]/);
-    expect(() => validatePath(p)).not.toThrow();
   });
 });
 
@@ -150,20 +126,22 @@ describe("model manager", () => {
     }) as typeof fetch;
     try {
       const s = new MemoryStore();
-      expect((await localStatus(s)).installed).toBe(false);
+      const supra = modelById(DEFAULT_MODEL_ID);
+      expect((await localStatus(s, supra)).installed).toBe(false);
       const seen: number[] = [];
-      const man = await installSupra(s, { endpoint: "https://hub.test", onProgress: (p) => seen.push(p.done) });
+      const man = await installModel(s, supra, { endpoint: "https://hub.test", onProgress: (p) => seen.push(p.done) });
       expect(man.files.map((f) => f.key).sort()).toEqual(["dit", "t5", "tok", "tok", "vae"]);
+      expect(man.version).toBe(2);
       expect(seen.at(-1)).toBe(3000 + 2000 + 1000 + 4);
       globalThis.fetch = (async () => { throw new Error("offline"); }) as typeof fetch;
-      const st = await localStatus(s);
+      const st = await localStatus(s, supra);
       expect(st.installed).toBe(true);
       expect(st.bytes).toBe(6004);
       // truncating a file invalidates the install
-      await s.write(`${SUPRA_DIR}/d.onnx`, new Uint8Array(5));
-      expect((await localStatus(s)).installed).toBe(false);
-      await removeSupra(s);
-      expect(await s.list(SUPRA_DIR)).toEqual([]);
+      await s.write(`${supra.dir}/d.onnx`, new Uint8Array(5));
+      expect((await localStatus(s, supra)).installed).toBe(false);
+      await removeModel(s, supra);
+      expect(await s.list(supra.dir)).toEqual([]);
     } finally {
       globalThis.fetch = orig;
     }
@@ -176,7 +154,7 @@ describe("model manager", () => {
       return new Response("[]");
     }) as typeof fetch;
     try {
-      await expect(installSupra(new MemoryStore(), { endpoint: "https://hub.test" })).rejects.toThrow(/unsafe path/);
+      await expect(installModel(new MemoryStore(), modelById(DEFAULT_MODEL_ID), { endpoint: "https://hub.test" })).rejects.toThrow(/unsafe path/);
     } finally {
       globalThis.fetch = orig;
     }

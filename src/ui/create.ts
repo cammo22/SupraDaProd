@@ -1,4 +1,5 @@
 // Create tab: prompt → generation (with live preview) → save.
+// Every sampling knob is remembered per model (see lib/settings).
 import { $, toast } from "./dom";
 import type { Ctx } from "./context";
 import { ensureModel } from "./download";
@@ -7,9 +8,11 @@ import type { EngineEvent } from "../engine/protocol";
 import { t } from "../lib/i18n";
 import { canvasToBlob, paintRgba, upscalePng } from "../lib/image";
 import { randomPrompt } from "../lib/prompts";
+import { evalsPerStep, isSolver, type Solver } from "../lib/sampler";
+import { sizesFor } from "../lib/registry";
 import { exportImage, suggestName } from "../lib/export";
 import { formatDuration } from "../lib/platform";
-import { onChange, settings, update } from "../lib/settings";
+import { modelParams, onChange, settings, update, updateParams } from "../lib/settings";
 import { keepAwake } from "../lib/wakelock";
 import type { GalleryItem } from "../lib/gallery";
 import { errMsg } from "../lib/errors";
@@ -28,6 +31,15 @@ export function initCreate(ctx: Ctx) {
     stepsVal: $("stepsVal"),
     cfg: $<HTMLInputElement>("cfg"),
     cfgVal: $("cfgVal"),
+    solver: $<HTMLSelectElement>("solver"),
+    rescale: $<HTMLInputElement>("cfgRescale"),
+    rescaleVal: $("rescaleVal"),
+    size: $<HTMLSelectElement>("size"),
+    sizeField: $("sizeField"),
+    karras: $<HTMLInputElement>("karras"),
+    karrasField: $("karrasField"),
+    costHint: $("costHint"),
+    presets: document.querySelectorAll<HTMLButtonElement>(".preset"),
     seed: $<HTMLInputElement>("seed"),
     shuffle: $<HTMLButtonElement>("btnShuffle"),
     randomSeed: $<HTMLInputElement>("randomSeed"),
@@ -50,25 +62,91 @@ export function initCreate(ctx: Ctx) {
   let abort: AbortController | null = null;
   let last: { png: Blob; prompt: string } | null = null;
 
-  /* ---------- controls ---------- */
-  const s0 = settings();
-  el.steps.value = String(s0.steps);
-  el.stepsVal.textContent = String(s0.steps);
-  el.cfg.value = String(Math.round(s0.cfg * 10));
-  el.cfgVal.textContent = s0.cfg.toFixed(1);
-  el.seed.value = String(s0.seed);
-  el.randomSeed.checked = s0.randomSeed;
-  el.negative.value = s0.negative;
+  /* ---------- controls (per model) ---------- */
+
+  /** Rough cost of the current settings, in network evaluations. */
+  const refreshHint = () => {
+    const steps = Number(el.steps.value);
+    const solver = isSolver(el.solver.value) ? el.solver.value : "euler";
+    const perStep = evalsPerStep(solver) * (Number(el.cfg.value) / 10 === 1 ? 1 : 2);
+    el.costHint.textContent = t("evals_hint", { n: steps * perStep });
+  };
+
+  const markPresets = () => {
+    const steps = Number(el.steps.value);
+    el.presets.forEach((b, i) => b.classList.toggle("on", ctx.model.presets[i] === steps));
+  };
+
+  /** Pushes the stored parameters of the current model into the controls. */
+  const syncControls = () => {
+    const spec = ctx.model;
+    const p = modelParams(spec.id);
+    el.steps.value = String(p.steps);
+    el.stepsVal.textContent = String(p.steps);
+    el.cfg.value = String(Math.round(p.cfg * 10));
+    el.cfgVal.textContent = p.cfg.toFixed(1);
+    el.solver.value = p.solver;
+    el.rescale.value = String(Math.round(p.cfgRescale * 10));
+    el.rescaleVal.textContent = `${Math.round(p.cfgRescale * 100)}%`;
+    el.karras.checked = p.karras;
+    const sizes = sizesFor(spec);
+    el.size.innerHTML = "";
+    for (const s of sizes) {
+      const o = document.createElement("option");
+      o.value = String(s);
+      o.textContent = `${s} × ${s}`;
+      el.size.append(o);
+    }
+    el.size.value = String(sizes.includes(p.size) ? p.size : spec.resolution);
+    el.karrasField.hidden = spec.family !== "sd15";
+    el.sizeField.hidden = sizes.length < 2;
+    const s = settings();
+    el.seed.value = String(s.seed);
+    el.randomSeed.checked = s.randomSeed;
+    el.negative.value = s.negative;
+    refreshHint();
+    markPresets();
+  };
+
 
   el.steps.addEventListener("input", () => {
     el.stepsVal.textContent = el.steps.value;
-    update("steps", Number(el.steps.value));
+    updateParams(ctx.model.id, { steps: Number(el.steps.value) });
+    refreshHint();
+    markPresets();
   });
   el.cfg.addEventListener("input", () => {
     const v = Number(el.cfg.value) / 10;
     el.cfgVal.textContent = v.toFixed(1);
-    update("cfg", v);
+    updateParams(ctx.model.id, { cfg: v });
+    refreshHint();
   });
+  el.solver.addEventListener("change", () => {
+    const solver = (isSolver(el.solver.value) ? el.solver.value : "euler") as Solver;
+    updateParams(ctx.model.id, { solver });
+    refreshHint();
+  });
+  el.rescale.addEventListener("input", () => {
+    const v = Number(el.rescale.value) / 10;
+    el.rescaleVal.textContent = `${Math.round(v * 100)}%`;
+    updateParams(ctx.model.id, { cfgRescale: v });
+  });
+  el.size.addEventListener("change", () => updateParams(ctx.model.id, { size: Number(el.size.value) }));
+  el.karras.addEventListener("change", () => updateParams(ctx.model.id, { karras: el.karras.checked }));
+  el.presets.forEach((b, i) =>
+    b.addEventListener("click", () => {
+      const steps = ctx.model.presets[i];
+      el.steps.value = String(steps);
+      el.stepsVal.textContent = String(steps);
+      updateParams(ctx.model.id, { steps });
+      refreshHint();
+      markPresets();
+    }),
+  );
+
+  const newSeed = () => Math.floor(Math.random() * 999_999_999);
+  const seedValue = () => Math.abs(Math.floor(Number(el.seed.value) || 0)) % 1_000_000_000;
+
   el.seed.addEventListener("change", () => update("seed", seedValue()));
   el.randomSeed.addEventListener("change", () => update("randomSeed", el.randomSeed.checked));
   el.negative.addEventListener("change", () => update("negative", el.negative.value.trim()));
@@ -92,9 +170,6 @@ export function initCreate(ctx: Ctx) {
     }
   });
 
-  const newSeed = () => Math.floor(Math.random() * 999_999_999);
-  const seedValue = () => Math.abs(Math.floor(Number(el.seed.value) || 0)) % 1_000_000_000;
-
   /* ---------- progress ---------- */
   let t0 = 0;
   let denoiseStart = 0;
@@ -114,6 +189,7 @@ export function initCreate(ctx: Ctx) {
       el.spSub.textContent = "";
     }
   };
+
 
   const onEvent = (e: EngineEvent) => {
     if (e.ev === "preview") {
@@ -161,25 +237,41 @@ export function initCreate(ctx: Ctx) {
     ctx.busy = true;
     abort = new AbortController();
     try {
-      const manifest = await ensureModel(ctx);
+      const manifest = await ensureModel(ctx, ctx.model);
+      ctx.manifest = manifest;
       setBusy(true);
       el.actions.hidden = true;
       el.spTitle.textContent = t("phase_load", { name: "" });
       el.spFill.style.width = "2%";
 
       const s = settings();
-      engine ??= new EngineClient({ store: ctx.store, manifest, backend: s.backend, memory: s.memory, onEvent });
+      if (!engine || engine.spec.id !== ctx.model.id) {
+        engine?.dispose();
+        engine = new EngineClient({ store: ctx.store, spec: ctx.model, manifest, backend: s.backend, memory: s.memory, onEvent });
+      }
       if (opts.newSeed || (s.randomSeed && opts.newSeed !== false)) {
         el.seed.value = String(newSeed());
         update("seed", seedValue());
       }
       const seed = seedValue();
-      const steps = Number(el.steps.value);
-      const cfgScale = Number(el.cfg.value) / 10;
+      const p = modelParams(ctx.model.id);
       const negative = el.negative.value.trim();
 
       t0 = performance.now();
-      const res = await engine.generate({ prompt, negative, seed, steps, cfgScale }, abort.signal);
+      const res = await engine.generate(
+        {
+          prompt,
+          negative,
+          seed,
+          steps: p.steps,
+          cfgScale: p.cfg,
+          solver: p.solver,
+          cfgRescale: p.cfgRescale,
+          size: p.size,
+          karras: p.karras,
+        },
+        abort.signal,
+      );
       showBackend(res.backend);
 
       paintRgba(res.rgba, res.size, el.canvas, DISPLAY);
@@ -190,7 +282,17 @@ export function initCreate(ctx: Ctx) {
       last = { png, prompt };
       el.actions.hidden = false;
 
-      const { persisted } = await ctx.gallery.add(png, { prompt, negative: negative || undefined, seed, steps, cfg: cfgScale });
+      const { persisted } = await ctx.gallery.add(png, {
+        prompt,
+        negative: negative || undefined,
+        seed,
+        steps: p.steps,
+        cfg: p.cfg,
+        solver: p.solver,
+        cfgRescale: p.cfgRescale,
+        model: ctx.model.id,
+        size: res.size,
+      });
       toast(persisted ? `${t("saved_gallery")} · ${formatDuration((performance.now() - t0) / 1000)}` : t("mem_only"), { error: !persisted });
     } catch (err) {
       const e = err as Error;
@@ -237,16 +339,14 @@ export function initCreate(ctx: Ctx) {
     el.prompt.value = item.prompt;
     el.negative.value = item.negative ?? "";
     update("negative", el.negative.value);
-    if (item.steps) {
-      el.steps.value = String(item.steps);
-      el.stepsVal.textContent = String(item.steps);
-      update("steps", item.steps);
-    }
-    if (item.cfg) {
-      el.cfg.value = String(Math.round(item.cfg * 10));
-      el.cfgVal.textContent = item.cfg.toFixed(1);
-      update("cfg", item.cfg);
-    }
+    const patch: Parameters<typeof updateParams>[1] = {};
+    if (item.steps) patch.steps = item.steps;
+    if (item.cfg) patch.cfg = item.cfg;
+    if (isSolver(item.solver)) patch.solver = item.solver;
+    if (typeof item.cfgRescale === "number") patch.cfgRescale = item.cfgRescale;
+    if (item.size) patch.size = item.size;
+    updateParams(ctx.model.id, patch);
+    syncControls();
     el.seed.value = String(item.seed);
     update("seed", seedValue());
     if (lockSeed) {
@@ -258,10 +358,12 @@ export function initCreate(ctx: Ctx) {
     engine?.dispose();
     engine = null;
   };
+  ctx.syncControls = syncControls;
 
   onChange((_s, key) => {
-    if (key === "lang") {
-      el.goLabel.textContent = ctx.busy ? t("stop") : t("generate");
-    }
+    if (key === "lang") el.goLabel.textContent = ctx.busy ? t("stop") : t("generate");
+    if (key === "modelId" || key === "params") syncControls();
   });
+
+  syncControls();
 }

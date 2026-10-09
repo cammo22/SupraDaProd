@@ -3,10 +3,18 @@
 //     even on hosts (GitHub Pages…) that can't set headers.
 //  2. Network-first with cache fallback → the app shell opens offline after the first visit.
 // Models are NOT cached here: they live in the origin-private file system (see storage/opfs.ts).
-const CACHE = "supradaprod-shell-v1";
+const CACHE = "supradaprod-shell-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener("activate", (e) =>
+  e.waitUntil(
+    (async () => {
+      await self.clients.claim();
+      // Drop shells from previous versions (the model files live in the OPFS, not here).
+      for (const key of await caches.keys()) if (key !== CACHE) await caches.delete(key);
+    })(),
+  ),
+);
 
 function isolate(res) {
   if (!res || res.status === 0 || res.type === "opaque") return res;

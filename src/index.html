@@ -16,7 +16,6 @@
     <defs>
       <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor" stroke="none"/></symbol>
       <symbol id="i-spark" viewBox="0 0 24 24"><path d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9L11 3zM19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z"/></symbol>
-      <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8.5 21h7"/></symbol>
       <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-5 4 4 2.5-2.5L20 17"/></symbol>
       <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
       <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9M13 5v4M7 15v4"/></symbol>
@@ -34,6 +33,9 @@
       <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20.5 20.5-4.8-4.8"/></symbol>
       <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
       <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5-12-7.5z" fill="currentColor"/></symbol>
+      <symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 2.8 8 4.4v9.6l-8 4.4-8-4.4V7.2l8-4.4z"/><path d="m4 7.2 8 4.4 8-4.4M12 11.6V21"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 13 5 5 9-11"/></symbol>
+      <symbol id="i-trash2" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13"/></symbol>
     </defs>
   </svg>
 
@@ -49,6 +51,7 @@
         </div>
       </div>
       <div class="top-actions">
+        <button class="chip model-chip" id="modelChip" data-i18n-title="models"><svg class="i sm"><use href="#i-cube"/></svg><span id="modelChipName">Supra2-IMG</span><svg class="i sm caret"><use href="#i-right"/></svg></button>
         <span class="chip" id="backendChip" hidden></span>
         <div class="seg lang-switch" id="langSwitch" role="group" aria-label="Language">
           <button data-lang="it">IT</button><button data-lang="en">EN</button>
@@ -60,7 +63,6 @@
     <div class="shell">
       <nav class="nav" role="tablist">
         <button class="tab on" data-view="create" role="tab"><svg class="i"><use href="#i-spark"/></svg><em data-i18n="tab_create"></em></button>
-        <button class="tab" data-view="voice" role="tab"><svg class="i"><use href="#i-mic"/></svg><em data-i18n="tab_voice"></em></button>
         <button class="tab" data-view="gallery" role="tab"><svg class="i"><use href="#i-image"/></svg><em data-i18n="tab_gallery"></em><b class="badge" id="galleryBadge" hidden>0</b></button>
       </nav>
 
@@ -97,10 +99,27 @@
                   <button class="btn primary grow" id="btnGo"><svg class="i"><use href="#i-spark"/></svg><span id="btnGoLabel" data-i18n="generate"></span></button>
                 </div>
                 <div class="tune" id="tune" hidden>
-                  <label class="field"><span><span data-i18n="steps"></span> <b id="stepsVal">30</b></span>
-                    <input type="range" id="steps" min="10" max="50" step="5" value="30" /></label>
+                  <div class="presets" role="group" aria-label="Quality">
+                    <button type="button" class="preset" data-preset="fast"><b>⚡</b><span data-i18n="preset_fast"></span></button>
+                    <button type="button" class="preset on" data-preset="balanced"><b>★</b><span data-i18n="preset_balanced"></span></button>
+                    <button type="button" class="preset" data-preset="max"><b>🏆</b><span data-i18n="preset_max"></span></button>
+                  </div>
+                  <label class="field"><span><span data-i18n="steps"></span> <b id="stepsVal">20</b></span>
+                    <input type="range" id="steps" min="4" max="60" step="1" value="20" /></label>
                   <label class="field"><span><span data-i18n="guidance"></span> <b id="cfgVal">3.0</b></span>
                     <input type="range" id="cfg" min="10" max="70" step="5" value="30" /></label>
+                  <label class="field"><span data-i18n="solver"></span>
+                    <select id="solver">
+                      <option value="dpmpp2m" data-i18n="solver_dpmpp2m"></option>
+                      <option value="euler" data-i18n="solver_euler"></option>
+                      <option value="heun" data-i18n="solver_heun"></option>
+                    </select>
+                    <small class="muted" id="costHint"></small></label>
+                  <label class="field"><span><span data-i18n="cfg_rescale"></span> <b id="rescaleVal">0%</b></span>
+                    <input type="range" id="cfgRescale" min="0" max="10" step="1" value="0" /></label>
+                  <label class="field" id="sizeField" hidden><span data-i18n="resolution"></span>
+                    <select id="size"></select></label>
+                  <label class="check" id="karrasField" hidden><input type="checkbox" id="karras" /><span data-i18n="karras"></span></label>
                   <div class="field seed-row">
                     <span data-i18n="seed"></span>
                     <input type="number" id="seed" value="0" min="0" max="999999999" inputmode="numeric" />
@@ -110,27 +129,6 @@
                   <label class="field"><span data-i18n="negative"></span>
                     <input type="text" id="negative" data-i18n-ph="negative_ph" spellcheck="false" maxlength="200" /></label>
                 </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ============ VOICE ============ -->
-        <section class="view" id="view-voice">
-          <div class="voice-center">
-            <p class="voice-tip" id="voiceTip" data-i18n="voice_tip"></p>
-            <div class="hold-zone">
-              <i class="pulse r1"></i><i class="pulse r2"></i>
-              <button class="hold-btn" id="holdBtn" aria-label="Hold to talk"><svg class="i huge"><use href="#i-mic"/></svg></button>
-            </div>
-            <div class="rec-status" id="recStatus"></div>
-            <label class="check"><input type="checkbox" id="translate" /><span data-i18n="voice_translate"></span></label>
-            <div class="card transcript" id="transcriptCard" hidden>
-              <div class="tc-head"><span data-i18n="transcript"></span><span class="chip">whisper-tiny</span></div>
-              <textarea id="transcript" rows="3" spellcheck="false"></textarea>
-              <div class="row">
-                <button class="btn ghost" id="btnRedo"><svg class="i"><use href="#i-repeat"/></svg><span data-i18n="redo"></span></button>
-                <button class="btn primary grow" id="btnVoiceGo"><svg class="i"><use href="#i-spark"/></svg><span data-i18n="gen_from_voice"></span></button>
               </div>
             </div>
           </div>
@@ -155,10 +153,22 @@
     </div>
   </div>
 
+  <!-- ============ MODELS ============ -->
+  <dialog id="modelsDialog" class="sheet">
+    <div class="sheet-head">
+      <h2 data-i18n="models"></h2>
+      <button class="icon-btn" id="modelsClose" data-i18n-title="close"><svg class="i"><use href="#i-x"/></svg></button>
+    </div>
+    <p class="muted" data-i18n="m_intro"></p>
+    <div id="modelsList" class="models"></div>
+    <p class="muted small" id="modelsHint"></p>
+    <p class="muted small" id="modelsFoot"></p>
+  </dialog>
+
   <!-- ============ MODEL DOWNLOAD ============ -->
   <dialog id="dlDialog" class="sheet">
-    <h2 data-i18n="dl_title"></h2>
-    <p class="muted" data-i18n="dl_sub"></p>
+    <h2 id="dlTitle"></h2>
+    <p class="muted" id="dlSub"></p>
     <p class="muted" id="dlMobileHint" data-i18n="dl_mobile_hint" hidden></p>
     <div id="dlParts" class="parts"></div>
     <div class="dl-total">
@@ -218,9 +228,8 @@
       <small class="muted" data-i18n="st_endpoint_hint"></small></label>
 
     <h3 data-i18n="st_storage"></h3>
+    <dl class="kv" id="stModels"></dl>
     <dl class="kv">
-      <dt data-i18n="st_model_size"></dt><dd id="stModelSize">—</dd>
-      <dt data-i18n="st_voice_size"></dt><dd id="stVoiceSize">—</dd>
       <dt data-i18n="st_gallery_size"></dt><dd id="stGallerySize">—</dd>
       <dt data-i18n="st_location"></dt><dd id="stLocation" class="mono">—</dd>
     </dl>
@@ -228,7 +237,6 @@
     <div class="row wrap">
       <button class="btn ghost" id="stOpenFolder" hidden><svg class="i"><use href="#i-folder"/></svg><span data-i18n="st_open_folder"></span></button>
       <button class="btn danger ghost" id="stDelModel" data-i18n="st_delete_model"></button>
-      <button class="btn danger ghost" id="stDelVoice" data-i18n="st_delete_voice"></button>
     </div>
 
     <h3 data-i18n="st_about"></h3>

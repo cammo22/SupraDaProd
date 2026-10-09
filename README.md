@@ -1,11 +1,7 @@
 # ⚡ SupraDaProd
 
-> Text-to-image **sul tuo dispositivo** — scrivilo o dillo, un modello da 104M parametri fa il resto.
-> Nessun server, nessuna API key, nessun abbonamento. Windows · Android · macOS · Linux.
-
-Powered by **[Supra2-IMG](https://huggingface.co/SupraLabs/Supra2-IMG)** (SupraLabs): un piccolo diffusion
-transformer (DiT ~104M parametri) addestrato da zero su 5.6M immagini, output 256×256. Pipeline ONNX di
-riferimento: [Bartholomheow/Supra2-IMG-ONNX](https://huggingface.co/Bartholomheow/Supra2-IMG-ONNX).
+> Text-to-image **sul tuo dispositivo** — scegli il modello, scrivi il prompt, il resto è offline.
+> Nessun server, nessuna API key, nessun abbonamento. Windows · Android · macOS · Linux · Web.
 
 <p align="center">
   <a href="https://cammo22.github.io/SupraDaProd/"><img alt="Apri l'app web" src="https://img.shields.io/badge/%E2%96%B6%20Apri%20l'app%20web-GitHub%20Pages-8b5cf6?style=for-the-badge"></a>
@@ -19,42 +15,57 @@ riferimento: [Bartholomheow/Supra2-IMG-ONNX](https://huggingface.co/Bartholomheo
   <img alt="Piattaforme" src="https://img.shields.io/badge/Windows%20%C2%B7%20Android%20%C2%B7%20macOS%20%C2%B7%20Linux%20%C2%B7%20Web-555">
 </p>
 
-## 📸 Screenshot
+## 🎨 I modelli
 
-<p align="center">
-  <img src="docs/screenshots/desktop-create.png" alt="Tab Crea su desktop" width="760"><br>
-  <sub><b>Crea</b> — scrivi il prompt, regola passi / fedeltà / seed e premi Genera.</sub>
-</p>
+Il selettore in alto a destra (o la voce **Modelli**) scarica e tiene in cache ogni motore
+separatamente: si paga una volta la connessione, poi tutto funziona offline.
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/desktop-voice.png" alt="Tab Voce" width="380"><br><sub><b>Voce</b> — tieni premuto il microfono e parla</sub></td>
-    <td align="center"><img src="docs/screenshots/desktop-gallery.png" alt="Galleria" width="380"><br><sub><b>Galleria</b> — tutto salvato in locale</sub></td>
-  </tr>
-</table>
+| Modello | Tipo | Output | Download | Note |
+| --- | --- | --- | --- | --- |
+| **Supra2-IMG** ⭐ | DiT flow 104M ([SupraLabs](https://huggingface.co/SupraLabs/Supra2-IMG)) | 256×256 | ~1 GB | Veloce anche senza GPU, ideale su telefono |
+| **DreamShaper 8** | Stable Diffusion 1.5 ([Lykon](https://huggingface.co/Lykon/dreamshaper-8)) | 384–640 px | ~2 GB | Molto più dettagliato; consigliata una GPU (export fp16) |
 
-<p align="center">
-  <img src="docs/screenshots/mobile-create.png" alt="Versione mobile: Crea" width="230">
-  &nbsp;&nbsp;
-  <img src="docs/screenshots/mobile-settings.png" alt="Versione mobile: Impostazioni" width="230"><br>
-  <sub>Interfaccia mobile (Android / PWA): Crea e Impostazioni.</sub>
-</p>
+Altri due modelli sono già in catalogo ma **non ancora eseguibili**, perché pubblicano i pesi in
+formati che il motore ONNX del browser non legge (GGUF/INT4 per ComfyUI) e non esiste una
+conversione ONNX:
 
-## 🚀 Provala subito
+| Modello | Stato | Perché |
+| --- | --- | --- |
+| [Iris 3B](https://huggingface.co/speridlabs/iris-3b) | ⏳ in attesa | 3B parametri, ~12 GB in fp32: serve un export ONNX quantizzato (q4) |
+| [Anima](https://huggingface.co/circlestone-labs/Anima) | 🚫 | 2B con licenza non commerciale e nessun export ONNX |
 
-La versione web gira direttamente nel browser, senza installare nulla: **[cammo22.github.io/SupraDaProd](https://cammo22.github.io/SupraDaProd/)**.
-Al primo uso scarica il modello (~1 GB), poi funziona anche offline. Per le prestazioni migliori usa un browser con **WebGPU** (Chrome/Edge recenti); altrimenti ripiega sulla CPU, più lenta.
+> Aggiungere un modello = 20 righe in `src/lib/registry.ts` (famiglia, file da scaricare,
+> risoluzione, licenza): appena esce una conversione ONNX di Iris o Anima si abilita da lì.
 
 ## ✨ Cosa fa
 
 | Tab | Funzione |
 | --- | --- |
-| ✨ **Crea** | Prompt, 🎲 random, passi / fedeltà / seed, prompt negativo, **anteprima live** dell'immagine che si forma, pulsante **Ferma** |
-| 🎙 **Voce** | **Tieni premuto** il microfono → parli (🇮🇹/🇬🇧) → rilasci → Whisper trascrive → genera. Opzione "traduci in inglese" |
-| 🖼 **Galleria** | Tutto salvato in locale: ricerca, ❤ preferiti, scorri tra le immagini, riusa prompt+seed, variazioni, esporta (anche **HD 1024px**) |
-| ⚙ **Impostazioni** | Motore (WebGPU/CPU), modalità memoria, sorgente modelli (mirror), spazio occupato, cartella dati |
+| ✨ **Crea** | Prompt, 🎲 random, preset di qualità, passi / fedeltà / seed / risoluzione, prompt negativo, **anteprima live** dell'immagine che si forma, pulsante **Ferma** |
+| 🖼 **Galleria** | Tutto salvato in locale |
+| ⚙ **Modelli** | Selettore con dimensioni, licenza, stato e download riprendibile per ogni modello |
 
-Tutto gira in locale. Il modello (~1 GB) si scarica **una volta** al primo uso e poi l'app funziona anche **offline**.
+**Campionamento** (novità della 2.0, tutte disponibili per entrambe le famiglie):
+
+| Solver | Costo | A cosa serve |
+| --- | --- | --- |
+| **DPM++ 2M** (default) | 1 valutazione/passo | Ordine 2 nella stessa forma dell'Euler: a parità di passi l'errore è 3–6× più piccolo, quindi si può scendere di passi senza perdere qualità |
+| **Euler** | 1 valutazione/passo | Il comportamento storico: stesso seed + stessi passi = stessa immagine della 1.x |
+| **Heun** | 2 valutazioni/passo | Predittore + correttore, per la massima precisione |
+
+Più: **correzione saturazione** (CFG rescale) per i prompt con fedeltà alta, **spaziatura Karras**
+per i modelli epsilon, e la valutazione congiunta condizionale/non condizionale in una sola
+chiamata al modello quando il grafo lo consente (circa 1,3–2× più veloce su GPU).
+
+## 🚀 Provala subito
+
+La versione web gira direttamente nel browser, senza installare nulla: **[cammo22.github.io/SupraDaProd](https://cammo22.github.io/SupraDaProd/)**.
+Al primo uso scarica il modello scelto, poi funziona anche offline. Per le prestazioni migliori usa un
+browser con **WebGPU** (Chrome/Edge recenti); altrimenti ripiega sulla CPU, più lenta.
+
+Tutto gira in locale: i modelli si scaricano **una volta** e poi l'app funziona anche **offline**.
+La galleria (ricerca, ❤ preferiti, riusa prompt+seed, variazioni, esporta anche in **HD 1024px**) e le
+impostazioni (motore, memoria, sorgente modelli, spazio occupato) vivono sul dispositivo.
 
 ## 📦 Download
 
@@ -92,25 +103,32 @@ Le build macOS non sono firmate: tasto destro → Apri la prima volta. Su Linux 
 ## 🧠 Come funziona
 
 ```
-           ┌────────────────────────── webview (UI, TypeScript, ~60 KB) ──────────────────────────┐
- prompt ─▶ │  Crea · Voce · Galleria · Impostazioni          Storage (Tauri: file reali / web: OPFS) │
-           └───────┬───────────────────────────────┬──────────────────────────────┬────────────────┘
-                   │ Worker (off-thread)           │ Worker                        │ download riprendibile
-        ┌──────────▼──────────┐          ┌─────────▼────────┐             ┌───────▼────────┐
-        │ T5 → DiT (Euler+CFG)│          │ Whisper-tiny q8  │             │ Range + sha256 │
-        │ → VAE  (onnxruntime-│          │ (Transformers.js)│             │ → disco        │
-        │ web: WebGPU | WASM) │          └──────────────────┘             └────────────────┘
-        └─────────────────────┘
+        ┌──────────────────────────── webview (UI, TypeScript, ~70 KB) ────────────────────────────┐
+prompt ▶│ Crea · Galleria · Modelli · Impostazioni          Storage (Tauri: file reali / web: OPFS) │
+        └───────┬───────────────────────────────────────────────┬──────────────────────────────────┘
+                │ Worker (off-thread, una pipeline per famiglia) │ download riprendibile
+     ┌──────────▼───────────────────┐  ┌──────────────────────────┐  ┌────────────────┐
+     │ flow:  T5 → DiT(σ) → VAE      │  │ sd15: CLIP → UNet(σ)     │  │ Range + sha256 │
+     │ 256×256, velocity, CFG batch  │  │ → VAE, 384–640 px, fp16  │  │ → disco        │
+     │ onnxruntime-web: WebGPU|WASM  │  │ WebGPU | WASM            │  └────────────────┘
+     └───────────────────────────────┘  └──────────────────────────┘
 ```
 
-1. `pipeline_config.json` + 3 modelli ONNX (DiT 417 MB · T5 419 MB · VAE 198 MB) + tokenizer vengono scaricati **su disco**, in streaming, con ripresa (`Range`), retry, watchdog di stallo e verifica **SHA-256**.
-2. Il prompt è tokenizzato (T5) e codificato da Flan-T5. Il prompt negativo (vuoto di default) fa da "uncond".
-3. Euler flow sampling con CFG: `z += dt·(v_uncond + cfg·(v_cond − v_uncond))` (default 30 passi / 3.0). Stesso seed ⇒ stessa immagine, identica a quella delle versioni 0.x.
-4. Durante i passi l'anteprima mostra la **stima dell'immagine finale** (`z + (1−t)·v` proiettata in RGB), non il rumore grezzo.
-5. Il VAE decodifica il latente in 256×256; la galleria lo salva su disco.
+1. Il **selettore Modelli** scarica su disco solo i file del modello scelto (dalla tree-API del Hub:
+   nomi, dimensioni e **SHA-256**), in streaming, con ripresa (`Range`), retry, watchdog di stallo.
+   Ogni modello ha la sua cartella `models/<id>` e il suo manifest: possono convivere.
+2. Il prompt viene tokenizzato dall'encoder giusto (SentencePiece/Flan-T5 oppure **CLIP BPE**, costruito
+   al volo dai file `vocab.json` + `merges.txt`). Il prompt negativo fa da ramo "uncond".
+3. Il denoise lavora **in spazio σ** (livello di rumore) per entrambe le famiglie:
+   `z = x₀ + σ·ε` per i modelli epsilon, `σ = 1 − t`, `x₀ = z + σ·v` per il flow. Lo stesso campionatore
+   (Euler / DPM++ 2M / Heun) guida quindi sia Supra2-IMG sia Stable Diffusion.
+4. Durante i passi l'anteprima mostra la **stima dell'immagine finale** proiettata in RGB, non il rumore.
+5. Il VAE decodifica il latente (256×256 oppure 384–640 px) e la galleria salva il PNG con prompt, seed,
+   passi, solver e modello usato.
 
-Tutta l'inferenza è in un **Web Worker**: l'interfaccia resta fluida e **Ferma** funziona sempre, anche su CPU.
-Con `COOP/COEP` attivi (l'app li imposta) il WASM usa **più thread**.
+Tutta l'inferenza è in un **Web Worker**: l'interfaccia resta fluida e **Ferma** funziona sempre, anche
+su CPU. Con `COOP/COEP` attivi (l'app li imposta) il WASM usa **più thread**; i modelli fp16 girano anche
+sul backend CPU (con conversione a metà precisione fatta in JS, così funziona ovunque).
 
 ## 🔧 Sviluppo
 
@@ -120,14 +138,17 @@ npm run dev            # solo frontend nel browser (storage = OPFS)
 npm run tauri dev      # app desktop
 npm run tauri build    # installer/bundle della tua piattaforma
 
-npm run typecheck && npm test     # tipi + 43 unit test
+npm run typecheck && npm test     # tipi + 55 unit test
 npm run build && npm run e2e      # Chromium vero + onnxruntime-web vero + "Hugging Face" finto
 ```
 
-L'e2e (`tests/e2e`) genera con Python un mini-repo Supra2-IMG finto (stessi nomi di tensori, pochi KB di pesi casuali),
-lo serve da un hub finto con `Range`/tree-API e guida l'app con Playwright: download, ripresa dopo connessione caduta,
-riproducibilità dei seed, prompt negativo, modalità risparmio RAM, annullamento, galleria, offline, voce.
-Requisiti: Node 22+, Rust stabile; per e2e `pip install onnx numpy`. Android: Android SDK + NDK, poi `npx tauri android init && node scripts/patch-android.mjs && npx tauri android build --apk`.
+L'e2e (`tests/e2e`) genera con Python due mini-repo finti (Supra2-IMG e un SD 1.5 con le stesse firme di
+tensori dei veri export ONNX), li serve da un hub finto con `Range`/tree-API e guida l'app con Playwright:
+download, ripresa dopo connessione caduta, riproducibilità dei seed, prompt negativo, solvers, batteria di
+guidance, modalità risparmio RAM, annullamento, galleria, offline, cambio modello e download del secondo
+modello. Requisiti: Node 22+, Rust stabile; per e2e `pip install onnx numpy`.
+Android: Android SDK + NDK, poi `npx tauri android init && node scripts/patch-android.mjs && npx tauri android build --apk`.
+
 
 ### Release
 Un tag `vX.Y.Z` fa partire `.github/workflows/release.yml`: builda Windows (installer + msi + portable), macOS, Linux, Android e pubblica la Release
@@ -144,10 +165,18 @@ Imposta nei *Secrets* del repo: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PAS
 
 ## 🩺 Problemi comuni
 - **Hugging Face non raggiungibile** (rete aziendale, paese bloccato): Impostazioni → *Sorgente modelli* → inserisci un mirror.
-- **Lenta**: in Impostazioni il chip in alto mostra il motore in uso. "CPU (WASM)" è 5–20× più lenta di WebGPU; riduci i passi (10–15 bastano per provare).
-- **Crash su telefono**: Impostazioni → Memoria → *Risparmio*.
+- **Lenta**: il chip in alto mostra il motore in uso. "CPU (WASM)" è 5–20× più lenta di WebGPU; usa la
+  preset **⚡ Rapida** (12 passi DPM++ 2M) o riduci i passi. DreamShaper 8 è molto più pesante di Supra2-IMG:
+  su CPU si misura in minuti, meglio WebGPU o un modello più piccolo.
+- **Crash su telefono / poca RAM**: Impostazioni → Memoria → *Risparmio* (carica le reti a richiesta).
+- **Spazio insufficiente**: ogni modello occupa la sua cartella; da *Modelli* puoi eliminare quelli che non usi.
 
 ## 📄 Licenze & crediti
 - Codice: MIT
-- Pesi [SupraLabs/Supra2-IMG](https://huggingface.co/SupraLabs/Supra2-IMG): Apache-2.0 · conversione ONNX [Bartholomheow/Supra2-IMG-ONNX](https://huggingface.co/Bartholomheow/Supra2-IMG-ONNX): Apache-2.0
-- Flan-T5 (Google) · SD-VAE (Stability AI) · Whisper (OpenAI) · onnxruntime-web (Microsoft) · Transformers.js (Hugging Face) · Tauri
+- **Supra2-IMG** — pesi [SupraLabs/Supra2-IMG](https://huggingface.co/SupraLabs/Supra2-IMG) (Apache-2.0) ·
+  conversione ONNX [Bartholomheow/Supra2-IMG-ONNX](https://huggingface.co/Bartholomheow/Supra2-IMG-ONNX) (Apache-2.0)
+- **DreamShaper 8** — [Lykon/dreamshaper-8](https://huggingface.co/Lykon/dreamshaper-8), CreativeML OpenRAIL-M ·
+  export ONNX fp16 di [Nikolai1902](https://huggingface.co/Nikolai1902/Dreamshaper8-ONNX-Olive)
+- Componenti: Flan-T5 (Google) · CLIP (OpenAI) · SD-VAE (Stability AI) · onnxruntime-web (Microsoft) ·
+  Transformers.js (Hugging Face) · Tauri
+- I pesi non sono inclusi: l'app li scarica dal Hub su richiesta, con la licenza del modello originale.
