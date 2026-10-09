@@ -258,18 +258,4 @@ jobs:
             | 🍎 macOS | `SupraDaProd-macos-arm64.dmg` · `SupraDaProd-macos-x64.dmg` |
             | 🐧 Linux | `SupraDaProd-linux.AppImage` · `.deb` |
 
-            ## What's new in 2.0
-
-            - 🎨 **Model selector** — download and keep several engines side by side:
-              **Supra2-IMG** (104M, 256×256, ~1 GB, fast even on CPU) and
-              **DreamShaper 8** (Stable Diffusion 1.5, 384–640 px, ~2 GB, much more detailed).
-              Iris 3B and Anima are listed but not runnable yet: they have no ONNX export.
-            - ⚡ **Better sampling** — new **DPM++ 2M** solver (default): 3–6× more accurate than Euler at the
-              same number of network evaluations, so fewer steps give a cleaner image. Plus **Heun**
-              (predictor+corrector), **Euler** (1.x-identical), **CFG rescale** and **Karras** spacing (SD).
-            - 🚀 **Faster** — conditional/unconditional passes are batched into a single model call when the
-              graph allows it, and the denoise loop no longer allocates anything per step.
-            - 🗑 **Voice input removed** — the app is now focused on images (no Whisper download, no
-              microphone permissions, ~11 MB less to ship).
-
-            Models are downloaded once on first use and stored on the device — after that everything works offline.
+            The model (~1 GB) is downloaded once on first use and stored on the device — after that everything works offline.
