@@ -1,16 +1,28 @@
 // Canvas helpers: paint worker output, export PNGs, smooth upscale for HD export.
 
+/** Reused staging canvas for RGBA → canvas: the live preview calls this every other step. */
+let staging: HTMLCanvasElement | null = null;
+let stagingCtx: CanvasRenderingContext2D | null = null;
+
+function stage(rgba: Uint8ClampedArray, size: number): HTMLCanvasElement {
+  if (!staging || staging.width !== size) {
+    staging = document.createElement("canvas");
+    staging.width = size;
+    staging.height = size;
+    stagingCtx = staging.getContext("2d");
+  }
+  stagingCtx!.putImageData(new ImageData(rgba as unknown as Uint8ClampedArray<ArrayBuffer>, size, size), 0, 0);
+  return staging;
+}
+
 export function paintRgba(rgba: Uint8ClampedArray, size: number, canvas: HTMLCanvasElement, displaySize = size): void {
-  const src = document.createElement("canvas");
-  src.width = size;
-  src.height = size;
-  src.getContext("2d")!.putImageData(new ImageData(rgba as unknown as Uint8ClampedArray<ArrayBuffer>, size, size), 0, 0);
-  canvas.width = displaySize;
-  canvas.height = displaySize;
+  if (canvas.width !== displaySize) canvas.width = displaySize;
+  if (canvas.height !== displaySize) canvas.height = displaySize;
   const ctx = canvas.getContext("2d")!;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(src, 0, 0, displaySize, displaySize);
+  // Same buffer size → the pixels are already there, no need to clear first.
+  ctx.drawImage(stage(rgba, size), 0, 0, displaySize, displaySize);
 }
 
 export const canvasToBlob = (c: HTMLCanvasElement, type = "image/png"): Promise<Blob> =>

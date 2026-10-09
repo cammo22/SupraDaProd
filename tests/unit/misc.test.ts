@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { Rpc, Transfer } from "../../src/workers/rpc";
-import { resample, rms } from "../../src/voice/recorder";
-import { cachePath } from "../../src/voice/whisper";
 import { MemoryStore } from "../../src/lib/storage/memory";
 import { readAll, readJson, removeTree, usage, validatePath, writeJson } from "../../src/lib/storage/types";
 import { PROMPTS, randomPrompt } from "../../src/lib/prompts";
@@ -54,29 +52,6 @@ describe("rpc", () => {
     r.failAll(new Error("gone"));
     await expect(p).rejects.toThrow("gone");
     a.close(); b.close();
-  });
-});
-
-describe("audio helpers", () => {
-  it("resamples 48k → 16k keeping duration and shape", () => {
-    const n = 48000;
-    const sine = Float32Array.from({ length: n }, (_, i) => Math.sin((2 * Math.PI * 440 * i) / 48000));
-    const out = resample(sine, 48000, 16000);
-    expect(out.length).toBe(16000);
-    expect(out[0]).toBeCloseTo(0, 3);
-    expect(Math.max(...out)).toBeGreaterThan(0.9);
-    expect(rms(out)).toBeCloseTo(Math.SQRT1_2, 1);
-  });
-  it("is a no-op at the same rate and safe on empty input", () => {
-    const x = Float32Array.of(1, 2, 3);
-    expect(resample(x, 16000, 16000)).toBe(x);
-    expect(resample(new Float32Array(0), 44100, 16000)).toHaveLength(0);
-  });
-  it("whisper cache keys are flat and fs-safe", () => {
-    const p = cachePath("https://huggingface.co/Xenova/whisper-tiny/resolve/main/onnx/encoder_model_quantized.onnx");
-    expect(p.startsWith("models/whisper/")).toBe(true);
-    expect(p.slice("models/whisper/".length)).not.toMatch(/[/\\:]/);
-    expect(() => validatePath(p)).not.toThrow();
   });
 });
 

@@ -1,7 +1,7 @@
 {
   "name": "SupraDaProd",
   "short_name": "SupraDaProd",
-  "description": "Text-to-image on your device — type it or say it.",
+  "description": "Text-to-image on your device, fully offline.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

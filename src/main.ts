@@ -4,7 +4,6 @@ import type { Ctx } from "./ui/context";
 import { initCreate } from "./ui/create";
 import { initGallery } from "./ui/gallery";
 import { initSettings } from "./ui/settings";
-import { initVoice } from "./ui/voice";
 import { Gallery } from "./lib/gallery";
 import { applyI18n } from "./lib/i18n";
 import { getStore } from "./lib/storage";
@@ -15,7 +14,7 @@ declare global {
   const __APP_VERSION__: string;
 }
 
-function switchView(name: "create" | "voice" | "gallery") {
+function switchView(name: "create" | "gallery") {
   document.querySelectorAll<HTMLElement>(".tab").forEach((b) => {
     const on = b.dataset.view === name;
     b.classList.toggle("on", on);
@@ -41,10 +40,9 @@ async function boot() {
 
   applyI18n();
   document.querySelectorAll<HTMLElement>(".tab").forEach((tab) =>
-    tab.addEventListener("click", () => switchView(tab.dataset.view as "create" | "voice" | "gallery")),
+    tab.addEventListener("click", () => switchView(tab.dataset.view as "create" | "gallery")),
   );
   initCreate(ctx);
-  initVoice(ctx);
   initGallery(ctx);
   initSettings(ctx);
   applyI18n();

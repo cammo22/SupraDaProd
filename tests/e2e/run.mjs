@@ -56,8 +56,6 @@ const browser = await chromium.launch({
   headless: true,
   args: [
     "--no-sandbox",
-    "--use-fake-device-for-media-stream",
-    "--use-fake-ui-for-media-stream",
     "--enable-unsafe-webgpu",
     "--enable-features=Vulkan",
     "--use-angle=swiftshader",
@@ -66,7 +64,7 @@ const browser = await chromium.launch({
 
 const logs = [];
 async function newApp(settings = {}, { keepStorage = false, context } = {}) {
-  const ctx = context ?? (await browser.newContext({ viewport: { width: 1200, height: 900 }, permissions: ["microphone"] }));
+  const ctx = context ?? (await browser.newContext({ viewport: { width: 1200, height: 900 } }));
   const page = await ctx.newPage();
   page.on("console", (m) => { if (["error", "warning"].includes(m.type())) logs.push(`[${m.type()}] ${m.text()}`); });
   page.on("pageerror", (e) => logs.push(`[pageerror] ${e.message}`));
@@ -270,21 +268,38 @@ await step("language switch + settings dialog + storage numbers", async () => {
   await ctx.close();
 });
 
-await step("voice: hold-to-talk records and handles an unavailable Whisper model gracefully", async () => {
-  const { page, ctx } = await newApp();
-  await page.click('.tab[data-view="voice"]');
-  const box = await page.locator("#holdBtn").boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.waitForSelector("#holdBtn.recording");
-  await page.waitForTimeout(1500);
-  const lvlSet = await page.evaluate(() => document.getElementById("holdBtn").style.getPropertyValue("--lvl") !== "");
-  await page.mouse.up();
-  assert(lvlSet, "level meter should update while recording");
-  await page.waitForFunction(() => !document.getElementById("holdBtn").classList.contains("recording"));
-  // Whisper can't be downloaded from the mock hub → the app must recover and stay usable.
-  await page.waitForFunction(() => !window.__supra.ctx.busy, null, { timeout: 60000 });
-  assert((await page.textContent("#recStatus")).length > 0);
+await step("solvers: DPM++ 2M is the default, euler still reproduces, both are deterministic", async () => {
+  const { page, ctx } = await newApp({ steps: 8 });
+  await page.click("#btnTune");
+  assert((await page.inputValue("#solver")) === "dpmpp2m", "DPM++ 2M should be the default solver");
+  assert(/model passes/.test(await page.textContent("#costHint")), "cost hint expected");
+
+  await generate(page, "solver check", { seed: 21 });
+  const dpmA = await canvasHash(page);
+  await generate(page, "solver check", { seed: 21 });
+  assert((await canvasHash(page)) === dpmA, "the default solver must be reproducible");
+
+  await page.selectOption("#solver", "euler");
+  await generate(page, "solver check", { seed: 21 });
+  const eulerA = await canvasHash(page);
+  assert(eulerA !== dpmA, "euler and DPM++ 2M should not give the same pixels");
+
+  await page.selectOption("#solver", "heun");
+  await generate(page, "solver check", { seed: 21 });
+  assert((await canvasHash(page)) !== eulerA, "heun should differ from euler too");
+
+  await page.locator('.preset[data-preset="fast"]').click();
+  assert((await page.inputValue("#steps")) === "12", "the quick preset sets 12 steps");
+  assert((await page.inputValue("#solver")) === "dpmpp2m", "the quick preset uses DPM++ 2M");
+
+  // Guidance rescale must reach the sampler and change the result.
+  await page.selectOption("#solver", "euler");
+  await generate(page, "solver check", { seed: 21 });
+  const plain = await canvasHash(page);
+  await page.fill("#cfgRescale", "10");
+  await page.dispatchEvent("#cfgRescale", "input");
+  await generate(page, "solver check", { seed: 21 });
+  assert((await canvasHash(page)) !== plain, "cfg rescale should influence the image");
   await ctx.close();
 });
 
@@ -308,7 +323,7 @@ await hub.close();
 if (logs.length) {
   const csp = logs.filter((l) => /Content Security Policy|Refused to/i.test(l));
   if (csp.length) { failures.push("CSP violations"); console.log("\n  ✗ CSP violations:\n    " + [...new Set(csp)].join("\n    ")); }
-  const interesting = logs.filter((l) => !/favicon|Failed to load resource|net::ERR|whisper|Xenova|huggingface/i.test(l));
+  const interesting = logs.filter((l) => !/favicon|Failed to load resource|net::ERR|huggingface/i.test(l));
   if (interesting.length) console.log("\nbrowser console noise:\n  " + [...new Set(interesting)].slice(0, 15).join("\n  "));
 }
 console.log(`\n${passed} passed, ${failures.length} failed${failures.length ? `: ${failures.join("; ")}` : ""}\n`);

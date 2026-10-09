@@ -5,9 +5,9 @@ import type { Store } from "../lib/storage/types";
 export interface Ctx {
   store: Store;
   gallery: Gallery;
-  /** True while a generation / download / transcription is running. */
+  /** True while a generation / download is running. */
   busy: boolean;
-  switchView(name: "create" | "voice" | "gallery"): void;
+  switchView(name: "create" | "gallery"): void;
   /** Runs a generation from the Create tab controls (optionally with a prompt override). */
   generate(opts?: { prompt?: string; newSeed?: boolean }): Promise<void>;
   /** Puts a gallery item's parameters into the Create controls. */

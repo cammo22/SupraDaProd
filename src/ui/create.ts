@@ -7,6 +7,7 @@ import type { EngineEvent } from "../engine/protocol";
 import { t } from "../lib/i18n";
 import { canvasToBlob, paintRgba, upscalePng } from "../lib/image";
 import { randomPrompt } from "../lib/prompts";
+import { evalsPerStep, PRESETS, type Preset, type Solver } from "../lib/sampler";
 import { exportImage, suggestName } from "../lib/export";
 import { formatDuration } from "../lib/platform";
 import { onChange, settings, update } from "../lib/settings";
@@ -28,6 +29,11 @@ export function initCreate(ctx: Ctx) {
     stepsVal: $("stepsVal"),
     cfg: $<HTMLInputElement>("cfg"),
     cfgVal: $("cfgVal"),
+    solver: $<HTMLSelectElement>("solver"),
+    rescale: $<HTMLInputElement>("cfgRescale"),
+    rescaleVal: $("rescaleVal"),
+    costHint: $("costHint"),
+    presets: document.querySelectorAll<HTMLButtonElement>(".preset"),
     seed: $<HTMLInputElement>("seed"),
     shuffle: $<HTMLButtonElement>("btnShuffle"),
     randomSeed: $<HTMLInputElement>("randomSeed"),
@@ -56,19 +62,66 @@ export function initCreate(ctx: Ctx) {
   el.stepsVal.textContent = String(s0.steps);
   el.cfg.value = String(Math.round(s0.cfg * 10));
   el.cfgVal.textContent = s0.cfg.toFixed(1);
+  el.solver.value = s0.solver;
+  el.rescale.value = String(Math.round(s0.cfgRescale * 10));
+  el.rescaleVal.textContent = `${Math.round(s0.cfgRescale * 100)}%`;
   el.seed.value = String(s0.seed);
   el.randomSeed.checked = s0.randomSeed;
   el.negative.value = s0.negative;
 
+  /** Rough cost of the current settings, in DiT evaluations (guidance doubles it). */
+  const refreshHint = () => {
+    const steps = Number(el.steps.value);
+    const solver = el.solver.value as Solver;
+    const perStep = evalsPerStep(solver) * (Number(el.cfg.value) / 10 === 1 ? 1 : 2);
+    el.costHint.textContent = t("evals_hint", { n: steps * perStep });
+  };
+  const markPresets = () => {
+    const steps = Number(el.steps.value);
+    const solver = el.solver.value as Solver;
+    el.presets.forEach((b) => {
+      const p = PRESETS.find((x) => x.id === (b.dataset.preset as Preset["id"]));
+      b.classList.toggle("on", !!p && p.steps === steps && p.solver === solver);
+    });
+  };
+
   el.steps.addEventListener("input", () => {
     el.stepsVal.textContent = el.steps.value;
     update("steps", Number(el.steps.value));
+    refreshHint();
+    markPresets();
   });
   el.cfg.addEventListener("input", () => {
     const v = Number(el.cfg.value) / 10;
     el.cfgVal.textContent = v.toFixed(1);
     update("cfg", v);
+    refreshHint();
   });
+  el.solver.addEventListener("change", () => {
+    update("solver", el.solver.value as Solver);
+    refreshHint();
+    markPresets();
+  });
+  el.rescale.addEventListener("input", () => {
+    const v = Number(el.rescale.value) / 10;
+    el.rescaleVal.textContent = `${Math.round(v * 100)}%`;
+    update("cfgRescale", v);
+  });
+  el.presets.forEach((b) =>
+    b.addEventListener("click", () => {
+      const p = PRESETS.find((x) => x.id === b.dataset.preset);
+      if (!p) return;
+      el.steps.value = String(p.steps);
+      el.stepsVal.textContent = String(p.steps);
+      el.solver.value = p.solver;
+      update("steps", p.steps);
+      update("solver", p.solver);
+      refreshHint();
+      markPresets();
+    }),
+  );
+  refreshHint();
+  markPresets();
   el.seed.addEventListener("change", () => update("seed", seedValue()));
   el.randomSeed.addEventListener("change", () => update("randomSeed", el.randomSeed.checked));
   el.negative.addEventListener("change", () => update("negative", el.negative.value.trim()));
@@ -176,10 +229,12 @@ export function initCreate(ctx: Ctx) {
       const seed = seedValue();
       const steps = Number(el.steps.value);
       const cfgScale = Number(el.cfg.value) / 10;
+      const solver = el.solver.value as Solver;
+      const cfgRescale = Number(el.rescale.value) / 10;
       const negative = el.negative.value.trim();
 
       t0 = performance.now();
-      const res = await engine.generate({ prompt, negative, seed, steps, cfgScale }, abort.signal);
+      const res = await engine.generate({ prompt, negative, seed, steps, cfgScale, solver, cfgRescale }, abort.signal);
       showBackend(res.backend);
 
       paintRgba(res.rgba, res.size, el.canvas, DISPLAY);
@@ -190,7 +245,15 @@ export function initCreate(ctx: Ctx) {
       last = { png, prompt };
       el.actions.hidden = false;
 
-      const { persisted } = await ctx.gallery.add(png, { prompt, negative: negative || undefined, seed, steps, cfg: cfgScale });
+      const { persisted } = await ctx.gallery.add(png, {
+        prompt,
+        negative: negative || undefined,
+        seed,
+        steps,
+        cfg: cfgScale,
+        solver,
+        cfgRescale,
+      });
       toast(persisted ? `${t("saved_gallery")} · ${formatDuration((performance.now() - t0) / 1000)}` : t("mem_only"), { error: !persisted });
     } catch (err) {
       const e = err as Error;
@@ -247,6 +310,17 @@ export function initCreate(ctx: Ctx) {
       el.cfgVal.textContent = item.cfg.toFixed(1);
       update("cfg", item.cfg);
     }
+    if (item.solver) {
+      el.solver.value = item.solver;
+      update("solver", item.solver);
+    }
+    if (item.cfgRescale) {
+      el.rescale.value = String(Math.round(item.cfgRescale * 10));
+      el.rescaleVal.textContent = `${Math.round(item.cfgRescale * 100)}%`;
+      update("cfgRescale", item.cfgRescale);
+    }
+    refreshHint();
+    markPresets();
     el.seed.value = String(item.seed);
     update("seed", seedValue());
     if (lockSeed) {

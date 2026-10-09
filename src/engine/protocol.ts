@@ -1,3 +1,4 @@
+import type { Solver } from "../lib/sampler";
 import type { PipelineConfig } from "../lib/models";
 
 export type Backend = "webgpu" | "wasm";
@@ -19,6 +20,10 @@ export interface GenerateArgs {
   seed: number;
   steps: number;
   cfgScale: number;
+  /** Integrator used for the denoise loop (see lib/sampler). */
+  solver: Solver;
+  /** 0 = off … 1 = keep the guided velocity at the conditional scale. */
+  cfgRescale: number;
 }
 
 export type Phase = "load" | "encode" | "denoise" | "decode";

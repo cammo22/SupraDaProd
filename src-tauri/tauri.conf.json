@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' blob: data:; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost https: http:",
+      "csp": "default-src 'self' blob: data:; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' ipc: http://ipc.localhost https: http:",
       "headers": {
         "Cross-Origin-Opener-Policy": "same-origin",
         "Cross-Origin-Embedder-Policy": "require-corp"
@@ -35,8 +35,8 @@
     "active": true,
     "targets": "all",
     "category": "GraphicsAndDesign",
-    "shortDescription": "Text-to-image on your device — type it or say it.",
-    "longDescription": "SupraDaProd generates images from text or your voice, fully on-device, with the 104M-parameter Supra2-IMG model. No server, no account, no subscription.",
+    "shortDescription": "Text-to-image on your device — no server, no account.",
+    "longDescription": "SupraDaProd generates images from your text, fully on-device, with the 104M-parameter Supra2-IMG model. No server, no account, no subscription.",
     "copyright": "© 2026 cammo22 — MIT License",
     "license": "MIT",
     "licenseFile": "../LICENSE",

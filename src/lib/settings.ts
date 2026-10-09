@@ -1,5 +1,6 @@
 // User preferences — small, synchronous, persisted in localStorage.
 // (In the portable Windows build localStorage lives in the portable data folder too.)
+import { isSolver, type Solver } from "./sampler";
 import { DEFAULT_ENDPOINT } from "./models";
 
 export type Lang = "it" | "en";
@@ -13,21 +14,23 @@ export interface Settings {
   backend: "auto" | "webgpu" | "wasm";
   memory: "auto" | "fast" | "lean";
   endpoint: string;
-  translate: boolean; // voice: Whisper translates speech to English
+  solver: Solver; // ODE integrator of the denoise loop
+  cfgRescale: number; // 0 = off … 1 = counter the over-saturation of high guidance
   exportSize: 256 | 512 | 1024;
   randomSeed: boolean; // new seed on every generation
 }
 
 export const DEFAULTS: Settings = {
   lang: detectLang(),
-  steps: 30,
+  steps: 20,
   cfg: 3.0,
   seed: 0,
   negative: "",
   backend: "auto",
   memory: "auto",
   endpoint: DEFAULT_ENDPOINT,
-  translate: false,
+  solver: "dpmpp2m",
+  cfgRescale: 0,
   exportSize: 1024,
   randomSeed: true,
 };
@@ -50,7 +53,25 @@ function read(): Partial<Settings> {
   }
 }
 
-let current: Settings = { ...DEFAULTS, ...read() };
+const clamp = (v: unknown, lo: number, hi: number, fallback: number): number =>
+  typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback;
+
+/** Keeps hand-edited / older settings files from breaking the app. */
+function sanitize(s: Partial<Settings>): Settings {
+  const merged = { ...DEFAULTS, ...s };
+  return {
+    ...merged,
+    lang: merged.lang === "it" ? "it" : "en",
+    steps: Math.round(clamp(merged.steps, 4, 60, DEFAULTS.steps)),
+    cfg: clamp(merged.cfg, 0, 8, DEFAULTS.cfg),
+    cfgRescale: clamp(merged.cfgRescale, 0, 1, DEFAULTS.cfgRescale),
+    seed: Math.abs(Math.round(clamp(merged.seed, 0, 999_999_999, 0))),
+    solver: isSolver(merged.solver) ? merged.solver : DEFAULTS.solver,
+    exportSize: merged.exportSize === 256 || merged.exportSize === 512 ? merged.exportSize : 1024,
+  };
+}
+
+let current: Settings = sanitize(read());
 const listeners = new Set<(s: Settings, changed: keyof Settings) => void>();
 
 export const settings = (): Readonly<Settings> => current;

@@ -6,7 +6,6 @@ import { type Store, readJson, removeTree, usage, writeJson } from "./storage/ty
 export const SUPRA_REPO = "Bartholomheow/Supra2-IMG-ONNX";
 export const DEFAULT_ENDPOINT = "https://huggingface.co";
 export const SUPRA_DIR = "models/supra2-img";
-export const WHISPER_DIR = "models/whisper";
 
 export interface PipelineConfig {
   dit: string;
@@ -202,11 +201,4 @@ export async function removeSupra(store: Store): Promise<void> {
   await removeTree(store, SUPRA_DIR).catch(() => {});
 }
 
-export async function removeWhisper(store: Store): Promise<void> {
-  await removeTree(store, WHISPER_DIR).catch(() => {});
-}
-
-export const modelsUsage = async (store: Store) => ({
-  supra: await usage(store, SUPRA_DIR).catch(() => 0),
-  whisper: await usage(store, WHISPER_DIR).catch(() => 0),
-});
+export const modelUsage = async (store: Store): Promise<number> => usage(store, SUPRA_DIR).catch(() => 0);

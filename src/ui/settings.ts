@@ -2,7 +2,7 @@ import { $, closeOnBackdrop, confirmDialog, toast } from "./dom";
 import type { Ctx } from "./context";
 import { applyI18n, setLang, t } from "../lib/i18n";
 import { formatBytes, isAndroid, isTauri } from "../lib/platform";
-import { DEFAULT_ENDPOINT, localStatus, modelsUsage, removeSupra, removeWhisper } from "../lib/models";
+import { DEFAULT_ENDPOINT, localStatus, modelUsage, removeSupra } from "../lib/models";
 import { revealDataFolder } from "../lib/export";
 import { onChange, settings, update } from "../lib/settings";
 import { usage } from "../lib/storage/types";
@@ -37,10 +37,9 @@ export function initSettings(ctx: Ctx) {
   });
 
   async function refresh() {
-    const u = await modelsUsage(ctx.store);
+    const bytes = await modelUsage(ctx.store);
     const st = await localStatus(ctx.store);
-    $("stModelSize").textContent = st.installed ? formatBytes(u.supra) : u.supra ? `${formatBytes(u.supra)} (${t("not_installed")})` : t("not_installed");
-    $("stVoiceSize").textContent = u.whisper ? formatBytes(u.whisper) : t("not_installed");
+    $("stModelSize").textContent = st.installed ? formatBytes(bytes) : bytes ? `${formatBytes(bytes)} (${t("not_installed")})` : t("not_installed");
     $("stGallerySize").textContent = `${ctx.gallery.items.length} · ${formatBytes(await usage(ctx.store, "gallery").catch(() => 0))}`;
     $("stLocation").textContent = ctx.store.location ?? "—";
     $("stPortable").hidden = !ctx.store.portable;
@@ -60,12 +59,6 @@ export function initSettings(ctx: Ctx) {
     if (!(await confirmDialog(t("st_delete_confirm")))) return;
     ctx.resetEngines();
     await removeSupra(ctx.store);
-    void refresh();
-  });
-  $("stDelVoice").addEventListener("click", async () => {
-    if (!(await confirmDialog(t("st_delete_confirm")))) return;
-    ctx.resetEngines();
-    await removeWhisper(ctx.store);
     void refresh();
   });
 
