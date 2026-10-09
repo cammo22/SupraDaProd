@@ -116,11 +116,11 @@ export function create(ctx: PipeCtx): Pipeline {
       if (solver === "dpmpp2m") {
         integrateDpmpp2m(st, cur, data, sigma, sigmaNext, target);
       } else if (solver === "heun" && i < steps - 1) {
-        integrateEuler(cur, eps, sigmaNext - sigma, predictor);
+        epsNext.set(eps); // keep ε at the current point for the trapezoid
+        integrateEuler(cur, epsNext, sigmaNext - sigma, predictor);
         await evaluate(predictor, i + 1);
         ctx.check();
-        epsNext.set(eps);
-        integrateHeun(cur, eps, epsNext, sigmaNext - sigma, target);
+        integrateHeun(cur, epsNext, eps, sigmaNext - sigma, target);
       } else {
         integrateEuler(cur, eps, sigmaNext - sigma, target);
       }

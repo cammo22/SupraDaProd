@@ -356,6 +356,22 @@ await step("model selector: install DreamShaper (mock SD 1.5), switch, generate,
   await generate(page, "anime portrait", { seed: item.seed });
   assert((await canvasHash(page)) === sdA, "the SD pipeline must be reproducible");
 
+  // The other solvers must work with the epsilon schedule too.
+  for (const solver of ["dpmpp2m", "heun"]) {
+    await page.selectOption("#solver", solver);
+    const beforeSolver = await galleryCount(page);
+    await page.fill("#prompt", "anime portrait");
+    await page.click("#btnGo");
+    await page.waitForFunction((n) => window.__supra.ctx.gallery.items.length > n, beforeSolver, { timeout: 120000 });
+    await idle(page);
+    const solverItem = await page.evaluate(() => window.__supra.ctx.gallery.items[0]);
+    assert(solverItem.solver === solver && solverItem.model === "dreamshaper-8", `solver ${solver} did not reach the sampler`);
+    assert(await page.evaluate(() => !window.__supra.ctx.gallery.items[0].volatile), "image should be stored");
+  }
+  const heunHash = await canvasHash(page);
+  assert(heunHash !== sdA, "heun should differ from euler on the SD pipeline");
+  await page.selectOption("#solver", "euler");
+
   // Switching back must not re-download anything.
   hub.state.requests.length = 0;
   await page.click("#modelChip");

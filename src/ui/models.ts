@@ -5,8 +5,7 @@ import type { Ctx } from "./context";
 import { type Key, t } from "../lib/i18n";
 import { formatBytes, isMobile, isTauri } from "../lib/platform";
 import { localStatus, removeModel } from "../lib/models";
-import { REGISTRY, modelById, type ModelSpec } from "../lib/registry";
-import { settings, updateParams } from "../lib/settings";
+import { REGISTRY, type ModelSpec } from "../lib/registry";
 import { downloadModel } from "./download";
 
 /** The chip in the top bar always shows what will paint the next image. */
@@ -127,13 +126,4 @@ export function initModels(ctx: Ctx) {
 
   ctx.refreshModels = render;
   paintChip();
-}
-
-/** Applies a model's stored sampling parameters to the settings of the app. */
-export function paramsFor(id: string) {
-  const spec = modelById(id);
-  const stored = settings().params[id];
-  const params = stored ?? { ...spec.defaults, karras: false };
-  updateParams(id, params);
-  return params;
 }
