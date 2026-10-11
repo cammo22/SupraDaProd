@@ -36,7 +36,7 @@
     "targets": "all",
     "category": "GraphicsAndDesign",
     "shortDescription": "Text-to-image on your device — no server, no account.",
-    "longDescription": "SupraDaProd generates images from your text, fully on-device, with the 104M-parameter Supra2-IMG model. No server, no account, no subscription.",
+    "longDescription": "SupraDaProd generates images from your text, fully on-device: Supra2-IMG (104M, fast) and DreamShaper 8 (Stable Diffusion 1.5, detailed). Models are downloaded once, then everything works offline. No server, no account, no subscription.",
     "copyright": "© 2026 cammo22 — MIT License",
     "license": "MIT",
     "licenseFile": "../LICENSE",

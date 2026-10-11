@@ -66,7 +66,7 @@ export function create(ctx: PipeCtx): Pipeline {
     ctx.check();
     if (ctx.lean) await ctx.drop("clip");
 
-    const { sigmas, alphas, timesteps } = sigmaSchedule(trainSigmas, steps, !!a.karras);
+    const { sigmas, alphas, timesteps } = sigmaSchedule(trainSigmas, steps, !!a.karras, cfg.steps_offset ?? 0);
     // The exported UNet and VAE take fp16 tensors.
     const f16 = (data: Float32Array, d: number[]) => new ort.Tensor("float16", toHalfBits(data), d);
     const t16 = (t: number) => new ort.Tensor("float16", toHalfBits([t]), [1]);
@@ -149,7 +149,11 @@ export function create(ctx: PipeCtx): Pipeline {
 
   return {
     warm: async () => {
-      for (const role of ["clip", "unet", "vae"]) await ctx.load(role);
+      // Each network is hundreds of MB: let "Stop" in between two of them.
+      for (const role of ["clip", "unet", "vae"]) {
+        ctx.check();
+        await ctx.load(role);
+      }
     },
     generate,
   };

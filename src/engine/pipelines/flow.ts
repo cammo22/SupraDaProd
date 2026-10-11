@@ -194,7 +194,11 @@ export function create(ctx: PipeCtx): Pipeline {
 
   return {
     warm: async () => {
-      for (const role of ["t5", "dit", "vae"]) await ctx.load(role);
+      // Each network is hundreds of MB: let "Stop" in between two of them.
+      for (const role of ["t5", "dit", "vae"]) {
+        ctx.check();
+        await ctx.load(role);
+      }
     },
     generate,
   };

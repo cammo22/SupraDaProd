@@ -1,7 +1,7 @@
 import { $, closeOnBackdrop, confirmDialog, toast } from "./dom";
 import type { Ctx } from "./context";
 import { applyI18n, setLang, t } from "../lib/i18n";
-import { formatBytes, isAndroid, isTauri } from "../lib/platform";
+import { formatBytes, isAndroid, isolatedContext, isTauri } from "../lib/platform";
 import { DEFAULT_ENDPOINT, localStatus, modelUsage, removeModel } from "../lib/models";
 import { REGISTRY } from "../lib/registry";
 import { revealDataFolder } from "../lib/export";
@@ -16,11 +16,15 @@ export function initSettings(ctx: Ctx) {
   const exp = $<HTMLSelectElement>("stExport");
   const endpoint = $<HTMLInputElement>("stEndpoint");
 
-  const s = settings();
-  backend.value = s.backend;
-  memory.value = s.memory;
-  exp.value = String(s.exportSize);
-  endpoint.value = s.endpoint;
+  /** The controls mirror the stored settings — also when they changed elsewhere. */
+  const sync = () => {
+    const cur = settings();
+    backend.value = cur.backend;
+    memory.value = cur.memory;
+    exp.value = String(cur.exportSize);
+    endpoint.value = cur.endpoint;
+  };
+  sync();
 
   backend.addEventListener("change", () => {
     update("backend", backend.value as "auto" | "webgpu" | "wasm");
@@ -57,9 +61,10 @@ export function initSettings(ctx: Ctx) {
   }
 
   $("btnSettings").addEventListener("click", () => {
+    sync();
     void refresh();
     $("stVersion").textContent = __APP_VERSION__;
-    $("stRuntime").textContent = `${isTauri() ? "Tauri" : "Web"} · ${crossOriginIsolated ? t("st_isolation_on") : t("st_isolation_off")}`;
+    $("stRuntime").textContent = `${isTauri() ? "Tauri" : "Web"} · ${isolatedContext() ? t("st_isolation_on") : t("st_isolation_off")}`;
     dlg.showModal();
   });
   $("settingsClose").addEventListener("click", () => dlg.close());

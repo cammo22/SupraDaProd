@@ -29,6 +29,10 @@ export interface SdConfig {
   beta_end: number;
   num_train_timesteps: number;
   beta_schedule: string;
+  /** diffusers' `steps_offset`: shifts the picked training timesteps (SD 1.x → 1). */
+  steps_offset?: number;
+  /** What the UNet predicts; only "epsilon" can be sampled here (checked on install). */
+  prediction_type?: string;
 }
 
 export type ModelConfig = PipelineConfig | SdConfig;
@@ -74,6 +78,8 @@ interface SchedulerConfig {
   beta_end?: number;
   num_train_timesteps?: number;
   beta_schedule?: string;
+  steps_offset?: number;
+  prediction_type?: string;
 }
 
 const joinUrl = (endpoint: string, ...p: string[]) => [endpoint.replace(/\/+$/, ""), ...p].join("/");
@@ -205,7 +211,13 @@ async function readConfig(store: Store, spec: ModelSpec, endpoint: string, signa
   try {
     sched = await fetchJson<SchedulerConfig>(fileUrl(endpoint, spec.repo, "scheduler/scheduler_config.json"), signal);
   } catch {
-    /* SD 1.x defaults below */
+    // Offline repair of an existing install: the schedule is already on disk.
+    sched = (await readJson<SchedulerConfig>(store, `${spec.dir}/scheduler/scheduler_config.json`)) ?? {};
+  }
+  const prediction = sched.prediction_type ?? "epsilon";
+  if (prediction !== "epsilon") {
+    // Sampling a v-prediction / x0 model as if it predicted noise gives noise: say it loudly.
+    throw new Error(`this model predicts "${prediction}": only epsilon-prediction UNets are supported`);
   }
   const downsample = extra.downsample ?? 8;
   return {
@@ -218,6 +230,8 @@ async function readConfig(store: Store, spec: ModelSpec, endpoint: string, signa
     beta_end: sched.beta_end ?? 0.012,
     num_train_timesteps: sched.num_train_timesteps ?? 1000,
     beta_schedule: sched.beta_schedule ?? "scaled_linear",
+    steps_offset: sched.steps_offset ?? 0,
+    prediction_type: prediction,
   } satisfies SdConfig;
 }
 

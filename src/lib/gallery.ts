@@ -1,7 +1,9 @@
 // Gallery persistence on top of the Store: `gallery/index.json` + one PNG per image.
 // The index format is backward compatible with SupraDaProd 0.x (entries keyed by `file`).
 import { type Store, readJson, writeJson } from "./storage/types";
-import { isSolver, type Solver } from "./sampler";
+import { isSolver, SOLVER_LABELS, type Solver } from "./sampler";
+import { modelById } from "./registry";
+import { t } from "./i18n";
 
 export interface GalleryItem {
   /** Same as `file`; kept for clarity in the UI layer. */
@@ -152,4 +154,25 @@ export class Gallery {
       return null;
     }
   }
+}
+
+/**
+ * How an image was made, as short pieces for the viewer: date, model, resolution,
+ * seed, steps, guidance, solver, saturation fix. Items created before 2.0 carry no
+ * model/solver/size — those pieces are simply left out.
+ */
+export function describeItem(item: GalleryItem): string[] {
+  const out = [new Date(item.date).toLocaleString()];
+  if (item.model) {
+    const spec = modelById(item.model);
+    // A model that left the catalogue keeps its raw id (still useful information).
+    out.push(spec.id === item.model ? spec.name : item.model);
+  }
+  if (item.size) out.push(`${item.size}×${item.size}`);
+  out.push(`seed ${item.seed}`);
+  if (item.steps) out.push(t("g_steps", { n: item.steps }));
+  if (item.cfg) out.push(`cfg ${item.cfg}`);
+  if (isSolver(item.solver)) out.push(SOLVER_LABELS[item.solver]);
+  if (item.cfgRescale) out.push(`${t("cfg_rescale")} ${Math.round(item.cfgRescale * 100)}%`);
+  return out;
 }

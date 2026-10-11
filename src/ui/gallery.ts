@@ -4,7 +4,7 @@ import type { Ctx } from "./context";
 import { t } from "../lib/i18n";
 import { upscalePng } from "../lib/image";
 import { exportImage, suggestName } from "../lib/export";
-import type { GalleryItem } from "../lib/gallery";
+import { describeItem, type GalleryItem } from "../lib/gallery";
 import { settings } from "../lib/settings";
 import { errMsg } from "../lib/errors";
 
@@ -97,8 +97,7 @@ export function initGallery(ctx: Ctx) {
     img.src = url;
     img.alt = item.prompt;
     $("modalPrompt").textContent = item.prompt;
-    const meta = [new Date(item.date).toLocaleString(), `seed ${item.seed}`, item.steps ? `${item.steps} steps` : "", item.cfg ? `cfg ${item.cfg}` : ""];
-    $("modalInfo").textContent = meta.filter(Boolean).join(" · ");
+    $("modalInfo").textContent = describeItem(item).join(" · ");
     $("btnFav").classList.toggle("on", !!item.fav);
     $<HTMLButtonElement>("imgPrev").hidden = shown.length < 2;
     $<HTMLButtonElement>("imgNext").hidden = shown.length < 2;
@@ -135,16 +134,17 @@ export function initGallery(ctx: Ctx) {
     const it = current();
     if (!it) return;
     dlg.close();
-    ctx.loadParams(it, true);
-    ctx.switchView("create");
+    // loadParams also switches to the model that painted the image.
+    void ctx.loadParams(it, true).then(() => ctx.switchView("create"));
   });
   $("btnModalVar").addEventListener("click", () => {
     const it = current();
     if (!it) return;
     dlg.close();
-    ctx.loadParams(it, false);
-    ctx.switchView("create");
-    void ctx.generate({ newSeed: true });
+    void ctx.loadParams(it, false).then(() => {
+      ctx.switchView("create");
+      return ctx.generate({ newSeed: true });
+    });
   });
   const save = async (hd: boolean) => {
     const it = current();

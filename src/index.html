@@ -53,7 +53,7 @@
       <div class="top-actions">
         <button class="chip model-chip" id="modelChip" data-i18n-title="models"><svg class="i sm"><use href="#i-cube"/></svg><span id="modelChipName">Supra2-IMG</span><svg class="i sm caret"><use href="#i-right"/></svg></button>
         <span class="chip" id="backendChip" hidden></span>
-        <div class="seg lang-switch" id="langSwitch" role="group" aria-label="Language">
+        <div class="seg lang-switch" id="langSwitch" role="group" aria-label="Language" data-i18n-aria="st_language">
           <button data-lang="it">IT</button><button data-lang="en">EN</button>
         </div>
         <button class="icon-btn" id="btnSettings" data-i18n-title="settings"><svg class="i"><use href="#i-gear"/></svg></button>
@@ -99,7 +99,7 @@
                   <button class="btn primary grow" id="btnGo"><svg class="i"><use href="#i-spark"/></svg><span id="btnGoLabel" data-i18n="generate"></span></button>
                 </div>
                 <div class="tune" id="tune" hidden>
-                  <div class="presets" role="group" aria-label="Quality">
+                  <div class="presets" role="group" aria-label="Quality" data-i18n-aria="a_quality">
                     <button type="button" class="preset" data-preset="fast"><b>⚡</b><span data-i18n="preset_fast"></span></button>
                     <button type="button" class="preset on" data-preset="balanced"><b>★</b><span data-i18n="preset_balanced"></span></button>
                     <button type="button" class="preset" data-preset="max"><b>🏆</b><span data-i18n="preset_max"></span></button>
@@ -123,7 +123,7 @@
                   <div class="field seed-row">
                     <span data-i18n="seed"></span>
                     <input type="number" id="seed" value="0" min="0" max="999999999" inputmode="numeric" />
-                    <button class="icon-btn sm" id="btnShuffle" aria-label="shuffle"><svg class="i"><use href="#i-dice"/></svg></button>
+                    <button class="icon-btn sm" id="btnShuffle" aria-label="shuffle" data-i18n-aria="a_shuffle"><svg class="i"><use href="#i-dice"/></svg></button>
                   </div>
                   <label class="check"><input type="checkbox" id="randomSeed" /><span data-i18n="seed_random"></span></label>
                   <label class="field"><span data-i18n="negative"></span>
@@ -186,9 +186,9 @@
   <dialog id="imgDialog" class="sheet viewer">
     <button class="icon-btn close" id="imgClose" data-i18n-title="close"><svg class="i"><use href="#i-x"/></svg></button>
     <div class="viewer-stage">
-      <button class="icon-btn nav-l" id="imgPrev" aria-label="previous"><svg class="i"><use href="#i-left"/></svg></button>
+      <button class="icon-btn nav-l" id="imgPrev" aria-label="previous" data-i18n-aria="a_prev"><svg class="i"><use href="#i-left"/></svg></button>
       <img id="modalImg" alt="" />
-      <button class="icon-btn nav-r" id="imgNext" aria-label="next"><svg class="i"><use href="#i-right"/></svg></button>
+      <button class="icon-btn nav-r" id="imgNext" aria-label="next" data-i18n-aria="a_next"><svg class="i"><use href="#i-right"/></svg></button>
     </div>
     <p class="modal-prompt" id="modalPrompt"></p>
     <p class="muted small" id="modalInfo"></p>

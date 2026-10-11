@@ -81,6 +81,8 @@ const it = {
   gallery: "Galleria",
   gallery_empty: "Le tue creazioni vivranno qui.",
   gallery_none_found: "Nessun risultato.",
+  g_steps: "{n} passi",
+  g_model_missing: "Questa immagine è stata creata con {name}, che non è installato: scaricalo da «Modelli» per riprodurla identica.",
   search_ph: "Cerca nei prompt…",
   only_fav: "Solo preferiti",
   reuse: "Riusa",
@@ -90,6 +92,10 @@ const it = {
   img_missing: "Immagine non disponibile",
   close: "Chiudi",
   favorite: "Preferito",
+  a_quality: "Qualità",
+  a_shuffle: "Seed casuale",
+  a_prev: "Immagine precedente",
+  a_next: "Immagine successiva",
 
   dl_title: "Scarico {name}",
   dl_sub: "Il modello ({size}) viene salvato sul dispositivo: dopo funziona anche senza internet.",
@@ -220,6 +226,8 @@ const en: Record<Key, string> = {
   gallery: "Gallery",
   gallery_empty: "Your creations will live here.",
   gallery_none_found: "No results.",
+  g_steps: "{n} steps",
+  g_model_missing: "This image was painted by {name}, which is not installed — download it from “Models” to reproduce it exactly.",
   search_ph: "Search prompts…",
   only_fav: "Favorites only",
   reuse: "Reuse",
@@ -229,6 +237,10 @@ const en: Record<Key, string> = {
   img_missing: "Image unavailable",
   close: "Close",
   favorite: "Favorite",
+  a_quality: "Quality",
+  a_shuffle: "Random seed",
+  a_prev: "Previous image",
+  a_next: "Next image",
 
   dl_title: "Downloading {name}",
   dl_sub: "The model ({size}) is stored on this device — afterwards it works without internet.",
@@ -300,6 +312,10 @@ export function applyI18n(root: ParentNode = document): void {
     const v = t(el.dataset.i18nTitle as Key);
     el.title = v;
     el.setAttribute("aria-label", v);
+  });
+  // Elements that need a translated accessible name but no tooltip.
+  root.querySelectorAll<HTMLElement>("[data-i18n-aria]").forEach((el) => {
+    el.setAttribute("aria-label", t(el.dataset.i18nAria as Key));
   });
   document.documentElement.lang = lang();
 }

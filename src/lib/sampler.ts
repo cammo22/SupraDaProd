@@ -54,6 +54,13 @@ export type Solver = "euler" | "dpmpp2m" | "heun";
 /** Recommended order (first = default in the UI). */
 export const SOLVERS: readonly Solver[] = ["dpmpp2m", "euler", "heun"];
 
+/** Short display names (proper nouns — the same in every language). */
+export const SOLVER_LABELS: Readonly<Record<Solver, string>> = {
+  dpmpp2m: "DPM++ 2M",
+  euler: "Euler",
+  heun: "Heun",
+};
+
 export const isSolver = (v: unknown): v is Solver => v === "dpmpp2m" || v === "euler" || v === "heun";
 
 /** Network evaluations per denoise step (guidance may double it). */
@@ -187,15 +194,18 @@ export function betaSigmas(cfg: BetaSchedule): Float32Array {
 /**
  * Picks `steps` evenly spaced noise levels the way diffusers does for SD 1.x
  * ("leading" spacing: every ⌊T/steps⌋ training level, walked from the noisiest
- * down) and appends σ = 0 so the last step lands on the image.
+ * down, shifted by the scheduler's `steps_offset`) and appends σ = 0 so the last
+ * step lands on the image.
  */
-export function sigmaSchedule(all: Float32Array, steps: number, karras = false): SigmaSchedule {
+export function sigmaSchedule(all: Float32Array, steps: number, karras = false, stepsOffset = 0): SigmaSchedule {
   const train = all.length - 1;
   const stepRatio = Math.max(1, Math.floor(train / steps));
+  const off = Number.isFinite(stepsOffset) ? Math.max(0, Math.round(stepsOffset)) : 0;
   const picked: number[] = [];
   const pickedT: number[] = [];
   for (let k = 0; k < steps; k++) {
-    const idx = Math.min(train, (steps - 1 - k) * stepRatio);
+    // `train - 1` is the noisiest real level: `all[train]` is the final σ = 0.
+    const idx = Math.min(train - 1, (steps - 1 - k) * stepRatio + off);
     picked.push(all[idx]);
     pickedT.push(idx);
   }

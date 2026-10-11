@@ -1,6 +1,6 @@
-//! SupraDaProd — the heavy lifting (ONNX inference, audio, UI) happens in the
-//! webview; Rust provides the native shell, real file storage, the save dialog
-//! and the portable-mode plumbing.
+//! SupraDaProd — the heavy lifting (ONNX inference, UI) happens in the webview;
+//! Rust provides the native shell, real file storage, the save dialog and the
+//! portable-mode plumbing.
 
 mod export;
 mod store;

@@ -12,7 +12,7 @@ import { localStatus } from "./lib/models";
 import { modelById } from "./lib/registry";
 import { settings, update } from "./lib/settings";
 import { getStore } from "./lib/storage";
-import { isTauri } from "./lib/platform";
+import { isolatedContext, isTauri } from "./lib/platform";
 
 declare global {
   // injected by vite.config.ts
@@ -42,25 +42,33 @@ async function boot() {
     installed: false,
     switchView,
     generate: async () => {},
-    loadParams: () => {},
+    loadParams: async () => {},
     resetEngines: () => {},
     refreshModel: async () => {
       const status = await localStatus(store, ctx.model);
       ctx.manifest = status.manifest;
       ctx.installed = status.installed;
+      // The chip warns when the selected model is not on disk yet: it has to
+      // follow the real state, also at boot (before any dialog was ever opened).
+      ctx.refreshChip?.();
     },
-    useModel: async (id: string) => {
+    useModel: async (id: string, opts?: { install?: boolean }) => {
       const spec = modelById(id);
-      if (spec.unavailable) return void toast(t(spec.unavailable === "no-onnx" ? "m_no_onnx" : "m_too_big"));
-      if (ctx.busy) return;
+      if (spec.unavailable) {
+        toast(t(spec.unavailable === "no-onnx" ? "m_no_onnx" : "m_too_big"));
+        return false;
+      }
+      if (ctx.busy) return false;
       try {
-        if (!ctx.installed || ctx.model.id !== spec.id) {
-          const status = await localStatus(store, spec);
-          if (!status.installed) await ensureModel({ ...ctx, model: spec }, spec);
+        const status = await localStatus(store, spec);
+        if (!status.installed) {
+          // "Only if installed": never start a download the user did not ask for.
+          if (opts?.install === false) return false;
+          await ensureModel({ ...ctx, model: spec }, spec);
         }
       } catch (e) {
         if ((e as Error).name !== "AbortError") console.warn(e);
-        return;
+        return false;
       }
       ctx.resetEngines();
       update("modelId", spec.id);
@@ -69,6 +77,7 @@ async function boot() {
       ctx.syncControls?.();
       await ctx.refreshModels?.();
       toast(t("m_selected", { name: spec.name }));
+      return true;
     },
   };
 
@@ -101,7 +110,7 @@ function registerServiceWorker() {
     .then(async () => {
       await navigator.serviceWorker.ready;
       // First visit: the page was served without COOP/COEP; reload once so the worker can add them.
-      if (!crossOriginIsolated && !sessionStorage.getItem("supradaprod:coi-reload")) {
+      if (!isolatedContext() && !sessionStorage.getItem("supradaprod:coi-reload")) {
         sessionStorage.setItem("supradaprod:coi-reload", "1");
         location.reload();
       }

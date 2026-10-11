@@ -2,7 +2,7 @@
   "name": "supradaprod",
   "private": true,
   "version": "2.0.0",
-  "description": "Text-to-image studio on your device — type it or say it. Powered by Supra2-IMG (104M parameters, fully offline).",
+  "description": "Text-to-image studio on your device — Supra2-IMG and DreamShaper 8 (ONNX, WebGPU/WASM), fully offline.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -24,6 +24,7 @@
     "@resvg/resvg-js": "^2.6.2",
     "@tauri-apps/cli": "^2.9.6",
     "@webgpu/types": "^0.1.74",
+    "jsdom": "^27.4.0",
     "playwright-core": "^1.56.0",
     "typescript": "~5.9.3",
     "vite": "^7.1.11",

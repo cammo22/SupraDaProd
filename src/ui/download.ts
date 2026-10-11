@@ -8,17 +8,30 @@ import type { ModelSpec } from "../lib/registry";
 import { settings } from "../lib/settings";
 import { errMsg } from "../lib/errors";
 
+export interface ModelSheetOptions {
+  /** External cancellation — the Create tab's "Stop" also stops the download. */
+  signal?: AbortSignal;
+  /** Mirrors the install progress (used by the model card of the selector). */
+  onProgress?: (p: InstallProgress) => void;
+}
+
+const cancelled = () => Object.assign(new Error("model download cancelled"), { name: "AbortError" });
+
 /** Resolves with the manifest once the model is on disk (downloading if needed). */
-export async function ensureModel(ctx: Ctx, spec: ModelSpec): Promise<Manifest> {
+export async function ensureModel(ctx: Ctx, spec: ModelSpec, opts: ModelSheetOptions = {}): Promise<Manifest> {
   const status = await localStatus(ctx.store, spec);
   if (status.installed && status.manifest) return status.manifest;
-  return new Promise<Manifest>((resolve, reject) => runSheet(ctx, spec, resolve, reject, false));
+  if (opts.signal?.aborted) throw cancelled();
+  return new Promise<Manifest>((resolve, reject) => runSheet(ctx, spec, resolve, reject, false, opts));
 }
 
 /** Opens the sheet and starts downloading right away (model selector). */
-export function downloadModel(ctx: Ctx, spec: ModelSpec, _opts?: { autoModel?: boolean }): Promise<Manifest> {
-  return new Promise<Manifest>((resolve, reject) => runSheet(ctx, spec, resolve, reject, true));
+export function downloadModel(ctx: Ctx, spec: ModelSpec, opts: ModelSheetOptions = {}): Promise<Manifest> {
+  return new Promise<Manifest>((resolve, reject) => runSheet(ctx, spec, resolve, reject, true, opts));
 }
+
+/** The sheet is a single dialog: a second request supersedes the one before it. */
+let openSheet: (() => void) | null = null;
 
 function runSheet(
   ctx: Ctx,
@@ -26,7 +39,9 @@ function runSheet(
   resolve: (m: Manifest) => void,
   reject: (e: Error) => void,
   autoStart: boolean,
+  opts: ModelSheetOptions,
 ): void {
+  openSheet?.();
   const dlg = $<HTMLDialogElement>("dlDialog");
   const partsEl = $("dlParts");
   const fill = $("dlFill");
@@ -70,6 +85,7 @@ function runSheet(
     info.textContent = [p.speed > 0 ? t("dl_speed", { s: formatBytes(p.speed) }) : "", Number.isFinite(eta) ? t("eta", { s: formatDuration(eta) }) : ""]
       .filter(Boolean)
       .join(" · ");
+    opts.onProgress?.(p);
   };
 
   const setButtons = (mode: "start" | "running" | "paused" | "error") => {
@@ -115,17 +131,33 @@ function runSheet(
     if (running) ctl?.abort();
     else dlg.close();
   };
-  dlg.addEventListener(
-    "close",
-    () => {
-      ctl?.abort();
-      if (!finished) {
-        toast(t("dl_paused"));
-        reject(Object.assign(new Error("model download cancelled"), { name: "AbortError" }));
-      }
-    },
-    { once: true },
-  );
+
+  let settled = false;
+  /** "Stop" of the Create tab: interrupt the download, or close a sheet still waiting for Start. */
+  const onExternalAbort = () => {
+    if (running) ctl?.abort();
+    else if (dlg.open) dlg.close();
+  };
+  const onClose = () => {
+    ctl?.abort();
+    opts.signal?.removeEventListener("abort", onExternalAbort);
+    if (openSheet === supersede) openSheet = null;
+    if (settled) return;
+    settled = true;
+    if (!finished) {
+      toast(t("dl_paused"));
+      reject(cancelled());
+    }
+  };
+  const supersede = () => {
+    if (settled) return;
+    settled = true;
+    reject(cancelled());
+  };
+
+  opts.signal?.addEventListener("abort", onExternalAbort, { once: true });
+  dlg.addEventListener("close", onClose, { once: true });
+  openSheet = supersede;
 
   setButtons("start");
   pct.textContent = "0%";
@@ -134,4 +166,5 @@ function runSheet(
   statusEl.textContent = "";
   dlg.showModal();
   if (autoStart) void go();
+  if (opts.signal?.aborted) onExternalAbort();
 }

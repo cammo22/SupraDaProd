@@ -9,7 +9,7 @@ import { t } from "../lib/i18n";
 import { canvasToBlob, paintRgba, upscalePng } from "../lib/image";
 import { randomPrompt } from "../lib/prompts";
 import { evalsPerStep, isSolver, type Solver } from "../lib/sampler";
-import { sizesFor } from "../lib/registry";
+import { modelById, sizesFor } from "../lib/registry";
 import { exportImage, suggestName } from "../lib/export";
 import { formatDuration } from "../lib/platform";
 import { modelParams, onChange, settings, update, updateParams } from "../lib/settings";
@@ -237,8 +237,10 @@ export function initCreate(ctx: Ctx) {
     ctx.busy = true;
     abort = new AbortController();
     try {
-      const manifest = await ensureModel(ctx, ctx.model);
+      // "Stop" also cancels a model download that has not finished yet.
+      const manifest = await ensureModel(ctx, ctx.model, { signal: abort.signal });
       ctx.manifest = manifest;
+      if (abort.signal.aborted) throw new DOMException("aborted", "AbortError");
       setBusy(true);
       el.actions.hidden = true;
       el.spTitle.textContent = t("phase_load", { name: "" });
@@ -335,7 +337,13 @@ export function initCreate(ctx: Ctx) {
 
   /* ---------- api for other tabs ---------- */
   ctx.generate = generate;
-  ctx.loadParams = (item: GalleryItem, lockSeed: boolean) => {
+  ctx.loadParams = async (item: GalleryItem, lockSeed: boolean) => {
+    // An image can only be reproduced by the model that painted it: switch to it
+    // when it is on disk, and say so when it is not (no surprise downloads here).
+    if (item.model && item.model !== ctx.model.id && modelById(item.model).id === item.model) {
+      const switched = await ctx.useModel(item.model, { install: false });
+      if (!switched) toast(t("g_model_missing", { name: modelById(item.model).name }), { error: true });
+    }
     el.prompt.value = item.prompt;
     el.negative.value = item.negative ?? "";
     update("negative", el.negative.value);

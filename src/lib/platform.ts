@@ -17,9 +17,18 @@ export function deviceMemoryGB(): number | null {
 
 /** Threads for WebAssembly inference. Needs SharedArrayBuffer (cross-origin isolation). */
 export function wasmThreads(): number {
-  if (typeof crossOriginIsolated !== "undefined" && !crossOriginIsolated) return 1;
+  if (!isolatedContext()) return 1;
   const hc = navigator.hardwareConcurrency || 4;
   return Math.max(1, Math.min(8, hc - 1 || 1));
+}
+
+/**
+ * Cross-origin isolation (COOP/COEP) → SharedArrayBuffer → multi-threaded WASM.
+ * Some webviews (older WebKitGTK / Android WebView) do not expose the flag at all,
+ * so it must never be read bare: that would be a ReferenceError, not `false`.
+ */
+export function isolatedContext(): boolean {
+  return typeof crossOriginIsolated !== "undefined" && crossOriginIsolated === true;
 }
 
 /** Directory the page is served from, always with a trailing slash. */

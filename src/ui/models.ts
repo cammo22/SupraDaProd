@@ -31,10 +31,13 @@ export function initModels(ctx: Ctx) {
     if (spec.unavailable) el.classList.add("off");
 
     const badges = [
+      installed && !spec.unavailable ? `<span class="chip ok">✓ ${t("installed")}</span>` : "",
       `<span class="chip">${spec.params}</span>`,
       `<span class="chip">${spec.resolution}×${spec.resolution}</span>`,
       `<span class="chip">${spec.license}</span>`,
-    ].join("");
+    ]
+      .filter(Boolean)
+      .join("");
     const size = spec.unavailable ? "" : ` · ${formatBytes(installed ? bytes : spec.bytes)}`;
     el.innerHTML = `
       <header>
@@ -44,13 +47,15 @@ export function initModels(ctx: Ctx) {
       </header>
       <p class="muted small">${t(`${spec.i18n}.tagline` as Key)}</p>
       <p class="muted small">${t(`${spec.i18n}.blurb` as Key)}${size}</p>
-      <div class="bar"><i></i></div>
+      <p class="muted small credits">${t(`${spec.i18n}.credits` as Key)}</p>
+      <div class="bar" hidden><i></i></div>
       <div class="model-actions"></div>`;
     const actions = el.querySelector<HTMLElement>(".model-actions")!;
-    const label = el.querySelector<HTMLElement>(".model-actions")!;
+    const bar = el.querySelector<HTMLElement>(".bar")!;
+    const barFill = el.querySelector<HTMLElement>(".bar i")!;
 
     if (spec.unavailable) {
-      label.innerHTML = `<span class="chip warn">${t("m_unavailable")}</span><span class="muted small">${t(
+      actions.innerHTML = `<span class="chip warn">${t("m_unavailable")}</span><span class="muted small">${t(
         spec.unavailable === "no-onnx" ? "m_no_onnx" : "m_too_big",
       )}</span>`;
       return el;
@@ -70,8 +75,14 @@ export function initModels(ctx: Ctx) {
       dl.addEventListener("click", async () => {
         downloading = spec.id;
         dl.disabled = true;
+        bar.hidden = false;
         try {
-          await downloadModel(ctx, spec, { autoModel: true });
+          // The card shows the same progress the download sheet does.
+          await downloadModel(ctx, spec, {
+            onProgress: (p) => {
+              barFill.style.width = `${(p.total ? Math.min(1, p.done / p.total) : 0) * 100}%`;
+            },
+          });
           await ctx.useModel(spec.id);
           await render();
           dlg.close();
@@ -79,6 +90,8 @@ export function initModels(ctx: Ctx) {
           console.warn(e);
         } finally {
           downloading = null;
+          bar.hidden = true;
+          barFill.style.width = "0%";
         }
       });
       actions.append(dl, use);
@@ -125,5 +138,6 @@ export function initModels(ctx: Ctx) {
   $("modelsClose").addEventListener("click", () => dlg.close());
 
   ctx.refreshModels = render;
+  ctx.refreshChip = paintChip;
   paintChip();
 }
