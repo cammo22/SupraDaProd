@@ -1,3 +1,8 @@
+<!-- discord-card -->
+<p align="center">
+  <a href="https://discord.gg/Njs52aacwq"><img src=".github/discord-card.svg" alt="Entra nella community DaProd su Discord" width="720"></a>
+</p>
+
 # ⚡ SupraDaProd
 
 > Text-to-image **sul tuo dispositivo** — scegli il modello, scrivi il prompt, il resto è offline.
@@ -181,14 +186,3 @@ Imposta nei *Secrets* del repo: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PAS
 - Componenti: Flan-T5 (Google) · CLIP (OpenAI) · SD-VAE (Stability AI) · onnxruntime-web (Microsoft) ·
   Transformers.js (Hugging Face) · Tauri
 - I pesi non sono inclusi: l'app li scarica dal Hub su richiesta, con la licenza del modello originale.
-
----
-
-<!-- discord-card -->
-## 💬 Community
-
-<p align="center">
-  <a href="https://discord.gg/Njs52aacwq"><img src=".github/discord-card.svg" alt="Entra nella community DaProd su Discord" width="720"></a>
-</p>
-
-Domande, idee, bug o solo voglia di chiacchierare? Entra nel **[Discord di DaProd](https://discord.gg/Njs52aacwq)**: ogni app ha la sua stanza e le nuove versioni arrivano in automatico.
