@@ -13,6 +13,7 @@
   <a href="../../releases/latest"><img alt="Versione" src="https://img.shields.io/github/v/release/cammo22/SupraDaProd?label=versione"></a>
   <img alt="Licenza" src="https://img.shields.io/badge/licenza-MIT-blue">
   <img alt="Piattaforme" src="https://img.shields.io/badge/Windows%20%C2%B7%20Android%20%C2%B7%20macOS%20%C2%B7%20Linux%20%C2%B7%20Web-555">
+[![Discord](https://img.shields.io/badge/Discord-DaProd-5865F2?logo=discord&logoColor=white)](https://discord.gg/Njs52aacwq)
 </p>
 
 ## 🎨 I modelli
